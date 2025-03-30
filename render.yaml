@@ -28,6 +28,10 @@ services:
         generateValue: true
       - key: SCHEDULER_ENABLED
         value: "true"
+    buildFilter:
+      paths:
+        - requirements.txt
+    preDeployCommand: "flask db upgrade"
 
 databases:
   - name: emailbulk-db
