@@ -1,0 +1,156 @@
+{% extends 'base.html' %}
+
+{% block title %}Bounce Report{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="bi bi-exclamation-triangle me-2"></i>Email Bounce Report</h2>
+        <a href="{{ url_for('campaigns') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-2"></i>Back to Campaigns
+        </a>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0">Bounced Emails</h5>
+        </div>
+        <div class="card-body">
+            {% if bounced_emails %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Campaign</th>
+                            <th>Email</th>
+                            <th>Status</th>
+                            <th>Bounce Type</th>
+                            <th>Bounce Subtype</th>
+                            <th>Bounce Time</th>
+                            <th>Message ID</th>
+                            <th>Diagnostics</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for email in bounced_emails %}
+                        <tr>
+                            <td>
+                                <a href="{{ url_for('campaign_detail', campaign_id=email.campaign_id) }}">
+                                    {{ email.campaign.name }}
+                                </a>
+                            </td>
+                            <td>{{ email.email }}</td>
+                            <td>
+                                <span class="badge bg-danger">{{ email.delivery_status }}</span>
+                            </td>
+                            <td>{{ email.bounce_type or '-' }}</td>
+                            <td>{{ email.bounce_subtype or '-' }}</td>
+                            <td>{{ email.bounce_time.strftime('%Y-%m-%d %H:%M') if email.bounce_time else '-' }}</td>
+                            <td><small class="text-muted">{{ email.message_id[:10] + '...' if email.message_id else '-' }}</small></td>
+                            <td>
+                                {% if email.bounce_diagnostic %}
+                                <button type="button" class="btn btn-sm btn-outline-info" data-bs-toggle="tooltip" 
+                                        title="{{ email.bounce_diagnostic }}">
+                                    <i class="bi bi-info-circle"></i>
+                                </button>
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="alert alert-info mb-0">
+                <i class="bi bi-info-circle me-2"></i>
+                No bounced emails found. This could mean either all emails were delivered successfully or 
+                bounce notifications haven't been received yet.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="card mt-4">
+        <div class="card-header">
+            <h5 class="mb-0">Complaint Emails</h5>
+        </div>
+        <div class="card-body">
+            {% if complaint_emails %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Campaign</th>
+                            <th>Email</th>
+                            <th>Status</th>
+                            <th>Complaint Type</th>
+                            <th>Complaint Time</th>
+                            <th>Message ID</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for email in complaint_emails %}
+                        <tr>
+                            <td>
+                                <a href="{{ url_for('campaign_detail', campaign_id=email.campaign_id) }}">
+                                    {{ email.campaign.name }}
+                                </a>
+                            </td>
+                            <td>{{ email.email }}</td>
+                            <td>
+                                <span class="badge bg-warning">{{ email.delivery_status }}</span>
+                            </td>
+                            <td>{{ email.bounce_subtype or '-' }}</td>
+                            <td>{{ email.bounce_time.strftime('%Y-%m-%d %H:%M') if email.bounce_time else '-' }}</td>
+                            <td><small class="text-muted">{{ email.message_id[:10] + '...' if email.message_id else '-' }}</small></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="alert alert-info mb-0">
+                <i class="bi bi-info-circle me-2"></i>
+                No complaint emails found. This means no recipients have marked your emails as spam.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="card mt-4">
+        <div class="card-header">
+            <h5 class="mb-0">Delivery Statistics</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="card mb-3">
+                        <div class="card-body text-center">
+                            <h3 class="text-success">{{ stats.delivered }}</h3>
+                            <p class="mb-0">Delivered</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card mb-3">
+                        <div class="card-body text-center">
+                            <h3 class="text-danger">{{ stats.bounced }}</h3>
+                            <p class="mb-0">Bounced</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card mb-3">
+                        <div class="card-body text-center">
+                            <h3 class="text-warning">{{ stats.complained }}</h3>
+                            <p class="mb-0">Complained</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

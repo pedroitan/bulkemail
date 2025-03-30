@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Direct Fetch Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; }
+        button { 
+            background-color: #4CAF50; 
+            color: white; 
+            border: none; 
+            padding: 10px 15px; 
+            border-radius: 4px; 
+            cursor: pointer;
+            margin: 5px 0;
+        }
+        input { 
+            padding: 8px; 
+            margin: 5px 0; 
+            width: 300px; 
+        }
+        pre { 
+            background-color: #f5f5f5; 
+            padding: 10px; 
+            border-radius: 4px; 
+            overflow-x: auto;
+        }
+        .container { 
+            margin-bottom: 20px; 
+            border: 1px solid #ddd; 
+            padding: 15px; 
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Direct API Test</h1>
+    <p>This standalone HTML file directly tests the API endpoints using the browser's fetch API.</p>
+    
+    <div class="container">
+        <h2>API Configuration</h2>
+        <div>
+            <label for="baseUrl">API Base URL:</label>
+            <input type="text" id="baseUrl" value="http://localhost:5000" />
+        </div>
+    </div>
+    
+    <div class="container">
+        <h2>Start Campaign</h2>
+        <div>
+            <label for="campaignId">Campaign ID:</label>
+            <input type="number" id="campaignId" value="1" />
+        </div>
+        <button onclick="startCampaign()">Start Campaign</button>
+        <h3>Response:</h3>
+        <pre id="startCampaignResult">// Result will appear here</pre>
+    </div>
+    
+    <div class="container">
+        <h2>Send Test Email</h2>
+        <div>
+            <label for="testCampaignId">Campaign ID:</label>
+            <input type="number" id="testCampaignId" value="1" />
+        </div>
+        <div>
+            <label for="testEmail">Test Email:</label>
+            <input type="email" id="testEmail" value="success@simulator.amazonses.com" />
+        </div>
+        <button onclick="sendTestEmail()">Send Test Email</button>
+        <h3>Response:</h3>
+        <pre id="testEmailResult">// Result will appear here</pre>
+    </div>
+    
+    <div class="container">
+        <h2>Reset Campaign</h2>
+        <div>
+            <label for="resetCampaignId">Campaign ID:</label>
+            <input type="number" id="resetCampaignId" value="1" />
+        </div>
+        <button onclick="resetCampaign()">Reset Campaign to Draft</button>
+        <h3>Response:</h3>
+        <pre id="resetCampaignResult">// Result will appear here</pre>
+    </div>
+
+    <script>
+        // Function to start a campaign
+        function startCampaign() {
+            const campaignId = document.getElementById('campaignId').value;
+            const baseUrl = document.getElementById('baseUrl').value;
+            const url = `${baseUrl}/campaigns/${campaignId}/start`;
+            
+            document.getElementById('startCampaignResult').textContent = 'Sending request...';
+            
+            fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('startCampaignResult').textContent = JSON.stringify(data, null, 2);
+            })
+            .catch(error => {
+                document.getElementById('startCampaignResult').textContent = `Error: ${error.message}`;
+            });
+        }
+        
+        // Function to send a test email
+        function sendTestEmail() {
+            const campaignId = document.getElementById('testCampaignId').value;
+            const email = document.getElementById('testEmail').value;
+            const baseUrl = document.getElementById('baseUrl').value;
+            const url = `${baseUrl}/campaigns/${campaignId}/test-email`;
+            
+            document.getElementById('testEmailResult').textContent = 'Sending request...';
+            
+            fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ email: email })
+            })
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('testEmailResult').textContent = JSON.stringify(data, null, 2);
+            })
+            .catch(error => {
+                document.getElementById('testEmailResult').textContent = `Error: ${error.message}`;
+            });
+        }
+        
+        // Function to reset a campaign
+        function resetCampaign() {
+            const campaignId = document.getElementById('resetCampaignId').value;
+            const baseUrl = document.getElementById('baseUrl').value;
+            const url = `${baseUrl}/campaigns/${campaignId}/reset`;
+            
+            document.getElementById('resetCampaignResult').textContent = 'Sending request...';
+            
+            fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('resetCampaignResult').textContent = JSON.stringify(data, null, 2);
+            })
+            .catch(error => {
+                document.getElementById('resetCampaignResult').textContent = `Error: ${error.message}`;
+            });
+        }
+    </script>
+</body>
+</html>

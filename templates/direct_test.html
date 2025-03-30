@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Direct API Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        button {
+            padding: 10px 15px;
+            margin: 10px 0;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        pre {
+            background-color: #f5f5f5;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        .result {
+            margin-top: 20px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <h1>Direct API Test</h1>
+    <p>This page bypasses all Flask templates and directly calls the API endpoints using modern fetch API.</p>
+    
+    <div>
+        <h2>Start Campaign</h2>
+        <input type="number" id="campaignId" value="1" placeholder="Campaign ID">
+        <button onclick="startCampaign()">Start Campaign</button>
+        <div id="startResult" class="result">
+            <h3>Result:</h3>
+            <pre id="startResultText"></pre>
+        </div>
+    </div>
+    
+    <div>
+        <h2>Send Test Email</h2>
+        <input type="number" id="testCampaignId" value="1" placeholder="Campaign ID">
+        <input type="email" id="testEmailAddress" value="success@simulator.amazonses.com" placeholder="Email address">
+        <button onclick="sendTestEmail()">Send Test Email</button>
+        <div id="testResult" class="result">
+            <h3>Result:</h3>
+            <pre id="testResultText"></pre>
+        </div>
+    </div>
+    
+    <div>
+        <h2>Console Log</h2>
+        <pre id="consoleLog">// Log will appear here</pre>
+        <button onclick="clearLog()">Clear Log</button>
+    </div>
+
+    <script>
+        // Utility function to log to the page
+        function log(message) {
+            const logEl = document.getElementById('consoleLog');
+            const timestamp = new Date().toLocaleTimeString();
+            logEl.textContent = `[${timestamp}] ${message}\n${logEl.textContent}`;
+            console.log(`[${timestamp}] ${message}`);
+        }
+        
+        // Clear the log
+        function clearLog() {
+            document.getElementById('consoleLog').textContent = '// Log will appear here';
+        }
+        
+        // Start a campaign
+        function startCampaign() {
+            const campaignId = document.getElementById('campaignId').value;
+            log(`Starting campaign ${campaignId}...`);
+            
+            // Show that we're making a request
+            document.getElementById('startResult').style.display = 'block';
+            document.getElementById('startResultText').textContent = 'Sending request...';
+            
+            // Make the fetch request
+            fetch(`/campaigns/${campaignId}/start`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => {
+                log(`Received response with status: ${response.status}`);
+                return response.json();
+            })
+            .then(data => {
+                log(`Campaign start response: ${JSON.stringify(data)}`);
+                document.getElementById('startResultText').textContent = JSON.stringify(data, null, 2);
+            })
+            .catch(error => {
+                log(`Error: ${error.message}`);
+                document.getElementById('startResultText').textContent = `Error: ${error.message}`;
+            });
+        }
+        
+        // Send a test email
+        function sendTestEmail() {
+            const campaignId = document.getElementById('testCampaignId').value;
+            const email = document.getElementById('testEmailAddress').value;
+            log(`Sending test email to ${email} for campaign ${campaignId}...`);
+            
+            // Show that we're making a request
+            document.getElementById('testResult').style.display = 'block';
+            document.getElementById('testResultText').textContent = 'Sending request...';
+            
+            // Make the fetch request
+            fetch(`/campaigns/${campaignId}/test-email`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ email: email })
+            })
+            .then(response => {
+                log(`Received response with status: ${response.status}`);
+                return response.json();
+            })
+            .then(data => {
+                log(`Test email response: ${JSON.stringify(data)}`);
+                document.getElementById('testResultText').textContent = JSON.stringify(data, null, 2);
+            })
+            .catch(error => {
+                log(`Error: ${error.message}`);
+                document.getElementById('testResultText').textContent = `Error: ${error.message}`;
+            });
+        }
+        
+        // Log when the page loads
+        window.onload = function() {
+            log('Page loaded. Ready to test API endpoints.');
+        };
+    </script>
+</body>
+</html>

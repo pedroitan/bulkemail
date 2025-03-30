@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email API Test</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        pre {
+            background-color: #f8f9fa;
+            padding: 1rem;
+            border-radius: 4px;
+            max-height: 300px;
+            overflow: auto;
+        }
+        .response-area {
+            margin-top: 1rem;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-5">
+        <h1>Email API Test</h1>
+        <div class="alert alert-info">
+            This page tests the API endpoints directly without interference from other JavaScript.
+        </div>
+
+        <div class="row mt-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Start Campaign</h5>
+                    </div>
+                    <div class="card-body">
+                        <form id="startCampaignForm">
+                            <div class="mb-3">
+                                <label for="campaignId" class="form-label">Campaign ID</label>
+                                <input type="number" class="form-control" id="campaignId" value="1">
+                            </div>
+                            <button type="submit" class="btn btn-primary">Start Campaign</button>
+                        </form>
+                        <div id="startCampaignResponse" class="response-area">
+                            <h6>Response:</h6>
+                            <pre id="startCampaignResponseText"></pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Send Test Email</h5>
+                    </div>
+                    <div class="card-body">
+                        <form id="testEmailForm">
+                            <div class="mb-3">
+                                <label for="testCampaignId" class="form-label">Campaign ID</label>
+                                <input type="number" class="form-control" id="testCampaignId" value="1">
+                            </div>
+                            <div class="mb-3">
+                                <label for="testEmail" class="form-label">Test Email</label>
+                                <input type="email" class="form-control" id="testEmail" value="success@simulator.amazonses.com">
+                            </div>
+                            <div class="mb-3">
+                                <button type="button" class="btn btn-sm btn-outline-secondary me-1" onclick="document.getElementById('testEmail').value='success@simulator.amazonses.com'">Success</button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary me-1" onclick="document.getElementById('testEmail').value='bounce@simulator.amazonses.com'">Bounce</button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('testEmail').value='complaint@simulator.amazonses.com'">Complaint</button>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Send Test Email</button>
+                        </form>
+                        <div id="testEmailResponse" class="response-area">
+                            <h6>Response:</h6>
+                            <pre id="testEmailResponseText"></pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Debug Log</h5>
+                    </div>
+                    <div class="card-body">
+                        <pre id="debugLog">Debug information will appear here...</pre>
+                        <button class="btn btn-secondary btn-sm" onclick="document.getElementById('debugLog').textContent = 'Debug information will appear here...'">Clear Log</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Debug logger function
+        function log(message) {
+            const debugLog = document.getElementById('debugLog');
+            const timestamp = new Date().toLocaleTimeString();
+            debugLog.textContent = `[${timestamp}] ${message}\n` + debugLog.textContent;
+        }
+
+        // Start Campaign Form
+        document.getElementById('startCampaignForm').addEventListener('submit', function(event) {
+            event.preventDefault();
+            
+            const campaignId = document.getElementById('campaignId').value;
+            log(`Attempting to start campaign ${campaignId}...`);
+            
+            fetch(`/campaigns/${campaignId}/start`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => {
+                log(`Received response with status: ${response.status}`);
+                return response.json();
+            })
+            .then(data => {
+                log(`Response data: ${JSON.stringify(data)}`);
+                
+                const responseArea = document.getElementById('startCampaignResponse');
+                const responseText = document.getElementById('startCampaignResponseText');
+                
+                responseArea.style.display = 'block';
+                responseText.textContent = JSON.stringify(data, null, 2);
+            })
+            .catch(error => {
+                log(`Error: ${error.message}`);
+                
+                const responseArea = document.getElementById('startCampaignResponse');
+                const responseText = document.getElementById('startCampaignResponseText');
+                
+                responseArea.style.display = 'block';
+                responseText.textContent = `Error: ${error.message}`;
+            });
+        });
+
+        // Test Email Form
+        document.getElementById('testEmailForm').addEventListener('submit', function(event) {
+            event.preventDefault();
+            
+            const campaignId = document.getElementById('testCampaignId').value;
+            const testEmail = document.getElementById('testEmail').value;
+            
+            log(`Attempting to send test email to ${testEmail} for campaign ${campaignId}...`);
+            
+            fetch(`/campaigns/${campaignId}/test-email`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    email: testEmail
+                })
+            })
+            .then(response => {
+                log(`Received response with status: ${response.status}`);
+                return response.json();
+            })
+            .then(data => {
+                log(`Response data: ${JSON.stringify(data)}`);
+                
+                const responseArea = document.getElementById('testEmailResponse');
+                const responseText = document.getElementById('testEmailResponseText');
+                
+                responseArea.style.display = 'block';
+                responseText.textContent = JSON.stringify(data, null, 2);
+            })
+            .catch(error => {
+                log(`Error: ${error.message}`);
+                
+                const responseArea = document.getElementById('testEmailResponse');
+                const responseText = document.getElementById('testEmailResponseText');
+                
+                responseArea.style.display = 'block';
+                responseText.textContent = `Error: ${error.message}`;
+            });
+        });
+
+        // Log page load
+        window.addEventListener('load', function() {
+            log('API Test page loaded');
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,185 @@
+{% extends 'base.html' %}
+
+{% block title %}Bulk Email Dashboard{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="bi bi-speedometer2 me-2"></i>Dashboard</h2>
+        <a href="{{ url_for('create_campaign') }}" class="btn btn-primary">
+            <i class="bi bi-plus-circle me-2"></i>New Campaign
+        </a>
+    </div>
+
+    <div class="row">
+        <div class="col-md-3">
+            <div class="card text-white bg-primary mb-3">
+                <div class="card-body">
+                    <h5 class="card-title">Total Campaigns</h5>
+                    <h2 class="card-text">{{ campaigns|length }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-white bg-success mb-3">
+                <div class="card-body">
+                    <h5 class="card-title">Completed</h5>
+                    <h2 class="card-text">{{ campaigns|selectattr('status', 'equalto', 'completed')|list|length }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-white bg-warning mb-3">
+                <div class="card-body">
+                    <h5 class="card-title">Pending</h5>
+                    <h2 class="card-text">{{ campaigns|selectattr('status', 'equalto', 'pending')|list|length }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-white bg-danger mb-3">
+                <div class="card-body">
+                    <h5 class="card-title">Failed</h5>
+                    <h2 class="card-text">{{ campaigns|selectattr('status', 'equalto', 'failed')|list|length }}</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Recent Campaigns</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table id="campaignTable" class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Scheduled Time</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for campaign in campaigns[:5] %}
+                                <tr>
+                                    <td>{{ campaign.name }}</td>
+                                    <td>{{ campaign.scheduled_time.strftime('%Y-%m-%d %H:%M') }}</td>
+                                    <td>
+                                        <span class="campaign-status status-{{ campaign.status }}">
+                                            {{ campaign.status|replace('_', ' ')|title }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <div class="btn-group" role="group">
+                                            <a href="{{ url_for('campaign_detail', campaign_id=campaign.id) }}" class="btn btn-sm btn-outline-primary">
+                                                <i class="bi bi-eye"></i>
+                                            </a>
+                                            <button type="button" class="btn btn-sm btn-outline-danger delete-campaign" data-campaign-id="{{ campaign.id }}">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="4" class="text-center">No campaigns yet. <a href="{{ url_for('create_campaign') }}">Create one now</a>.</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% if campaigns|length > 5 %}
+                    <div class="text-center mt-3">
+                        <a href="{{ url_for('campaigns') }}" class="btn btn-outline-primary">View All Campaigns</a>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Campaign Status</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="campaignStatusChart"></canvas>
+                </div>
+            </div>
+            
+            <div class="card mt-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Quick Actions</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <a href="{{ url_for('create_campaign') }}" class="btn btn-primary">
+                            <i class="bi bi-plus-circle me-2"></i>New Campaign
+                        </a>
+                        <a href="{{ url_for('campaigns') }}" class="btn btn-outline-secondary">
+                            <i class="bi bi-list-ul me-2"></i>View All Campaigns
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const campaignTable = document.getElementById('campaignTable');
+        if (campaignTable) {
+            campaignTable.addEventListener('click', (event) => {
+                // Find the delete button (could be the button itself or the icon inside it)
+                let target = event.target;
+                let deleteButton = null;
+                
+                // If clicked on the icon, find the parent button
+                if (target.tagName === 'I' && target.closest('.delete-campaign')) {
+                    deleteButton = target.closest('.delete-campaign');
+                } else if (target.classList.contains('delete-campaign')) {
+                    deleteButton = target;
+                }
+                
+                if (deleteButton) {
+                    if (confirm('Are you sure you want to delete this campaign?')) {
+                        const campaignId = deleteButton.dataset.campaignId;
+                        fetch(`/campaigns/${campaignId}/delete`, { method: 'POST' })
+                            .then(response => response.json())
+                            .then(data => {
+                                if (data.success) {
+                                    const row = deleteButton.closest('tr');
+                                    if (row) {
+                                        row.remove();
+                                    }
+                                } else {
+                                    alert('Failed to delete campaign: ' + (data.message || 'Unknown error'));
+                                }
+                            })
+                            .catch((error) => {
+                                console.error('Error deleting campaign:', error);
+                                alert('Error deleting campaign. Please try again.');
+                            });
+                    }
+                }
+            });
+
+            $('#campaignTable').DataTable({
+                order: [[0, 'desc']],
+                pageLength: 10,
+                lengthMenu: [[10, 25, 50, -1], [10, 25, 50, 'All']],
+                columnDefs: [
+                    { orderable: false, targets: -1 }
+                ]
+            });
+        }
+    });
+</script>
+{% endblock %}

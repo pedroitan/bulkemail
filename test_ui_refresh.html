@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Recipients Auto-Refresh Test</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <style>
+        body { padding: 20px; }
+        .status-badge { font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Recipients Auto-Refresh Test</h1>
+        <p>This page tests the auto-refresh functionality for the recipients table.</p>
+        
+        <div class="card mt-4">
+            <div class="card-header d-flex justify-content-between">
+                <h5>Recipients</h5>
+                <button id="manual-refresh" class="btn btn-primary btn-sm">Refresh Now</button>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover" id="recipients-table">
+                        <thead>
+                            <tr>
+                                <th>Email</th>
+                                <th>Status</th>
+                                <th>Delivery Status</th>
+                                <th>Sent At</th>
+                                <th>Details</th>
+                            </tr>
+                        </thead>
+                        <tbody id="recipients-tbody">
+                            <tr>
+                                <td colspan="5" class="text-center">Loading...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="card-footer">
+                <div id="last-update" class="text-muted small"></div>
+                <div id="status-message" class="mt-2"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const apiUrl = '/api/campaigns/1/recipients';
+            const refreshButton = document.getElementById('manual-refresh');
+            const statusMessage = document.getElementById('status-message');
+            const lastUpdate = document.getElementById('last-update');
+            
+            // Function to refresh recipients data
+            function refreshRecipientsTable() {
+                fetch(apiUrl)
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! Status: ${response.status}`);
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        if (data.success) {
+                            updateRecipientsTable(data.recipients);
+                            lastUpdate.textContent = `Last updated: ${new Date().toLocaleTimeString()}`;
+                            statusMessage.textContent = `Successfully loaded ${data.recipients.length} recipients`;
+                            statusMessage.className = 'mt-2 text-success';
+                        } else {
+                            statusMessage.textContent = data.message || 'Unknown error';
+                            statusMessage.className = 'mt-2 text-danger';
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error refreshing recipients:', error);
+                        statusMessage.textContent = `Error: ${error.message}`;
+                        statusMessage.className = 'mt-2 text-danger';
+                    });
+            }
+            
+            // Update the recipients table with the latest data
+            function updateRecipientsTable(recipients) {
+                const tbody = document.getElementById('recipients-tbody');
+                if (!tbody) return;
+                
+                // Clear existing rows
+                tbody.innerHTML = '';
+                
+                recipients.forEach(recipient => {
+                    const row = document.createElement('tr');
+                    
+                    // Email cell
+                    let cell = document.createElement('td');
+                    cell.textContent = recipient.email;
+                    row.appendChild(cell);
+                    
+                    // Status cell
+                    cell = document.createElement('td');
+                    const statusBadge = document.createElement('span');
+                    statusBadge.className = 'badge status-badge';
+                    
+                    if (recipient.status === 'pending') {
+                        statusBadge.className += ' bg-warning';
+                        statusBadge.textContent = 'Pending';
+                    } else if (recipient.status === 'sent') {
+                        statusBadge.className += ' bg-success';
+                        statusBadge.textContent = 'Sent';
+                    } else if (recipient.status === 'failed') {
+                        statusBadge.className += ' bg-danger';
+                        statusBadge.textContent = 'Failed';
+                    } else {
+                        statusBadge.className += ' bg-secondary';
+                        statusBadge.textContent = recipient.status;
+                    }
+                    
+                    cell.appendChild(statusBadge);
+                    row.appendChild(cell);
+                    
+                    // Delivery Status cell
+                    cell = document.createElement('td');
+                    const deliveryBadge = document.createElement('span');
+                    deliveryBadge.className = 'badge status-badge';
+                    
+                    if (recipient.delivery_status === 'delivered') {
+                        deliveryBadge.className += ' bg-success';
+                        deliveryBadge.textContent = 'Delivered';
+                    } else if (recipient.delivery_status === 'bounced') {
+                        deliveryBadge.className += ' bg-danger';
+                        deliveryBadge.textContent = 'Bounced';
+                    } else if (recipient.delivery_status === 'complained') {
+                        deliveryBadge.className += ' bg-warning';
+                        deliveryBadge.textContent = 'Complained';
+                    } else {
+                        deliveryBadge.className += ' bg-secondary';
+                        deliveryBadge.textContent = recipient.delivery_status;
+                    }
+                    
+                    cell.appendChild(deliveryBadge);
+                    row.appendChild(cell);
+                    
+                    // Sent At cell
+                    cell = document.createElement('td');
+                    if (recipient.sent_at) {
+                        const date = new Date(recipient.sent_at);
+                        cell.textContent = date.toLocaleString();
+                    } else {
+                        cell.textContent = '-';
+                    }
+                    row.appendChild(cell);
+                    
+                    // Details cell
+                    cell = document.createElement('td');
+                    if (recipient.error_message) {
+                        const detailsSpan = document.createElement('span');
+                        detailsSpan.className = 'badge bg-info';
+                        detailsSpan.textContent = recipient.error_message;
+                        cell.appendChild(detailsSpan);
+                    } else {
+                        cell.textContent = '-';
+                    }
+                    row.appendChild(cell);
+                    
+                    tbody.appendChild(row);
+                });
+            }
+            
+            // Add event listener for manual refresh button
+            refreshButton.addEventListener('click', () => {
+                statusMessage.textContent = 'Refreshing...';
+                statusMessage.className = 'mt-2 text-info';
+                refreshRecipientsTable();
+            });
+            
+            // Initial data load
+            refreshRecipientsTable();
+            
+            // Set up auto-refresh
+            setInterval(refreshRecipientsTable, 5000); // Refresh every 5 seconds
+        });
+    </script>
+</body>
+</html>

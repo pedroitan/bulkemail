@@ -1,0 +1,93 @@
+{% extends 'base.html' %}
+
+{% block title %}Bulk Email Edit Recipients{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="bi bi-people me-2"></i>Edit Recipients - {{ campaign.name }}</h2>
+        <div class="btn-group" role="group">
+            <a href="{{ url_for('campaign_detail', campaign_id=campaign.id) }}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left me-2"></i>Back to Campaign
+            </a>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Update Recipients</h5>
+                </div>
+                <div class="card-body">
+                    <form action="{{ url_for('edit_campaign_recipients', campaign_id=campaign.id) }}" method="POST" enctype="multipart/form-data">
+                        <div class="mb-4">
+                            <h6>Current Recipients</h6>
+                            <div class="table-responsive" style="max-height: 300px;">
+                                <table class="table table-sm table-hover">
+                                    <thead class="sticky-top bg-white">
+                                        <tr>
+                                            <th>Email</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for recipient in recipients %}
+                                        <tr>
+                                            <td>{{ recipient.email }}</td>
+                                            <td>
+                                                <button type="button" class="btn btn-sm btn-outline-danger" 
+                                                        onclick="removeRecipient('{{ recipient.id }}')">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <h6>Add New Recipients</h6>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label for="recipientFile" class="form-label">Upload Recipients File</label>
+                                    <input type="file" class="form-control" id="recipientFile" name="file" accept=".csv,.xlsx">
+                                    <div class="form-text">Upload a CSV or Excel file with email addresses</div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="recipientEmails" class="form-label">Or Enter Emails Manually</label>
+                                    <textarea class="form-control" id="recipientEmails" name="emails" rows="3" 
+                                              placeholder="Enter email addresses, one per line"></textarea>
+                                    <div class="form-text">Enter one email address per line</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="text-end">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-save me-2"></i>Save Changes
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<form id="deleteRecipientForm" method="POST">
+    <input type="hidden" name="_method" value="DELETE">
+</form>
+
+<script>
+function removeRecipient(recipientId) {
+    if (confirm('Are you sure you want to remove this recipient?')) {
+        const form = document.getElementById('deleteRecipientForm');
+        form.action = `{{ url_for('delete_campaign_recipient', campaign_id=campaign.id) }}/${recipientId}`;
+        form.submit();
+    }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,189 @@
+{% extends 'base.html' %}
+
+{% block title %}Bulk Email Create Campaign{% endblock %}
+
+{% block extra_css %}
+<link href="https://cdn.jsdelivr.net/npm/summernote@0.8.18/dist/summernote-bs4.min.css" rel="stylesheet">
+<style>
+    .note-editor {
+        margin-bottom: 1rem;
+    }
+    .form-group {
+        margin-bottom: 1rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="bi bi-plus-circle me-2"></i>Create New Campaign</h2>
+        <a href="{{ url_for('campaigns') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-2"></i>Back to Campaigns
+        </a>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <form method="post">
+                {{ form.csrf_token }}
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            {{ form.name.label(class="form-label") }}
+                            {{ form.name(class="form-control") }}
+                            {% if form.name.errors %}
+                            <div class="invalid-feedback d-block">
+                                {% for error in form.name.errors %}
+                                    {{ error }}
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            {{ form.subject.label(class="form-label") }}
+                            {{ form.subject(class="form-control") }}
+                            {% if form.subject.errors %}
+                            <div class="invalid-feedback d-block">
+                                {% for error in form.subject.errors %}
+                                    {{ error }}
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            {{ form.sender_name.label(class="form-label") }}
+                            {{ form.sender_name(class="form-control") }}
+                            {% if form.sender_name.errors %}
+                            <div class="invalid-feedback d-block">
+                                {% for error in form.sender_name.errors %}
+                                    {{ error }}
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            {{ form.scheduled_time.label(class="form-label") }}
+                            {{ form.scheduled_time(class="form-control", type="datetime-local") }}
+                            {% if form.scheduled_time.errors %}
+                            <div class="invalid-feedback d-block">
+                                {% for error in form.scheduled_time.errors %}
+                                    {{ error }}
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            {{ form.sender_email.label(class="form-label") }}
+                            {{ form.sender_email(class="form-control", placeholder="username") }}
+                            <small class="text-muted">{{ form.sender_email.description }}</small>
+                            {% if form.sender_email.errors %}
+                            <div class="invalid-feedback d-block">
+                                {% for error in form.sender_email.errors %}
+                                    {{ error }}
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            {{ form.sender_domain.label(class="form-label") }}
+                            {{ form.sender_domain(class="form-control") }}
+                            {% if form.sender_domain.errors %}
+                            <div class="invalid-feedback d-block">
+                                {% for error in form.sender_domain.errors %}
+                                    {{ error }}
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    {{ form.body_html.label(class="form-label") }}
+                    <div class="alert alert-info">
+                        <h6><i class="bi bi-info-circle me-2"></i>Template Variables</h6>
+                        <p class="mb-1">Use these placeholders in your email to personalize it for each recipient:</p>
+                        <ul class="mb-0">
+                            <li><code>${name}</code> - Recipient's name</li>
+                            <li><code>${any_column}</code> - Any column from your CSV/Excel file</li>
+                        </ul>
+                    </div>
+                    {{ form.body_html(class="form-control", id="summernote") }}
+                    {% if form.body_html.errors %}
+                    <div class="invalid-feedback d-block">
+                        {% for error in form.body_html.errors %}
+                            {{ error }}
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+                
+                <div class="form-group">
+                    {{ form.body_text.label(class="form-label") }}
+                    <div class="small text-muted mb-2">Plain text version of the email (optional, for clients that don't support HTML)</div>
+                    {{ form.body_text(class="form-control", rows=5) }}
+                    {% if form.body_text.errors %}
+                    <div class="invalid-feedback d-block">
+                        {% for error in form.body_text.errors %}
+                            {{ error }}
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+                
+                <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                    <a href="{{ url_for('campaigns') }}" class="btn btn-outline-secondary">Cancel</a>
+                    {{ form.submit(class="btn btn-primary") }}
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/summernote@0.8.18/dist/summernote-bs4.min.js"></script>
+
+<script>
+    $(document).ready(function() {
+        $('#summernote').summernote({
+            placeholder: 'Compose your email here...',
+            tabsize: 2,
+            height: 300,
+            toolbar: [
+                ['style', ['style']],
+                ['font', ['bold', 'underline', 'clear']],
+                ['color', ['color']],
+                ['para', ['ul', 'ol', 'paragraph']],
+                ['table', ['table']],
+                ['insert', ['link', 'picture']],
+                ['view', ['fullscreen', 'codeview', 'help']]
+            ]
+        });
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,80 @@
+{% extends 'base.html' %}
+
+{% block title %}Bulk Email Upload Recipients{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="bi bi-upload me-2"></i>Upload Recipients</h2>
+        <a href="{{ url_for('campaign_detail', campaign_id=campaign.id) }}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-2"></i>Back to Campaign
+        </a>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Upload Recipients for "{{ campaign.name }}"</h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <h6><i class="bi bi-info-circle me-2"></i>File Format Instructions</h6>
+                        <p>Please upload a CSV or Excel file with the following requirements:</p>
+                        <ul>
+                            <li>The file <strong>must</strong> include an <code>email</code> column</li>
+                            <li>Including a <code>name</code> column is recommended for personalization</li>
+                            <li>Any additional columns will be available as template variables</li>
+                            <li>For example, if your file has a column called <code>company</code>, you can use <code>${company}</code> in your email template</li>
+                        </ul>
+                    </div>
+
+                    <form method="post" enctype="multipart/form-data">
+                        {{ form.csrf_token }}
+                        
+                        <div class="form-group mb-4">
+                            {{ form.file.label(class="form-label") }}
+                            {{ form.file(class="form-control") }}
+                            {% if form.file.errors %}
+                            <div class="invalid-feedback d-block">
+                                {% for error in form.file.errors %}
+                                    {{ error }}
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                            <div class="form-text text-muted">Supported formats: .csv, .xlsx, .xls</div>
+                        </div>
+                        
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                            <a href="{{ url_for('campaign_detail', campaign_id=campaign.id) }}" class="btn btn-outline-secondary">Cancel</a>
+                            {{ form.submit(class="btn btn-primary") }}
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Example File Format</h5>
+                </div>
+                <div class="card-body">
+                    <h6>CSV Example:</h6>
+                    <div class="border p-3 rounded mb-3" style="background-color: #f8f9fa; font-family: monospace; white-space: pre-wrap;">email,name,company,role
+john@example.com,John Smith,Acme Inc,Manager
+jane@example.com,Jane Doe,XYZ Corp,Developer
+alex@example.com,Alex Johnson,123 Company,Designer</div>
+                    
+                    <h6>How Variables Work:</h6>
+                    <p>When you use <code>${name}</code> in your email template, it will be replaced with the recipient's name from your file.</p>
+                    
+                    <div class="alert alert-warning">
+                        <strong>Important:</strong> Make sure your CSV or Excel file has proper headers in the first row.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

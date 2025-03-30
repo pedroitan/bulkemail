@@ -1,0 +1,97 @@
+{% extends 'base.html' %}
+
+{% block title %}Bulk Email Confirm Recipients{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="bi bi-check-circle me-2"></i>Confirm Recipients</h2>
+        <a href="{{ url_for('upload_recipients', campaign_id=campaign.id) }}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-2"></i>Back to Upload
+        </a>
+    </div>
+
+    <div class="row">
+        <!-- Campaign Info Card -->
+        <div class="col-md-4">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Campaign Details</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="fw-bold">Campaign Name:</label>
+                        <div>{{ campaign.name }}</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="fw-bold">Total Recipients:</label>
+                        <div class="h4 mb-0 text-primary">{{ preview.total_rows }}</div>
+                    </div>
+                    <form action="{{ url_for('confirm_recipients', campaign_id=campaign.id) }}" method="post" class="mt-4">
+                        <input type="hidden" name="file_path" value="{{ file_path }}">
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-success btn-lg">
+                                <i class="bi bi-check-circle me-2"></i>Confirm Recipients
+                            </button>
+                            <a href="{{ url_for('upload_recipients', campaign_id=campaign.id) }}" class="btn btn-outline-secondary">
+                                Upload Different File
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recipients Preview Card -->
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">Email Recipients</h5>
+                    <span class="badge bg-primary">{{ preview.total_rows }} emails</span>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive" style="max-height: 600px; overflow-y: auto;">
+                        <table class="table table-hover table-sm mb-0">
+                            <thead style="position: sticky; top: 0; background: white; z-index: 1;">
+                                <tr>
+                                    <th style="width: 60px">#</th>
+                                    <th>Email Address</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for row in preview.rows %}
+                                <tr>
+                                    <td class="text-muted">{{ loop.index }}</td>
+                                    <td class="font-monospace">{{ row.email }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.table-sm td, .table-sm th {
+    padding: 0.4rem 0.75rem;
+    font-size: 0.875rem;
+}
+.font-monospace {
+    font-family: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+.table-hover tbody tr:hover {
+    background-color: rgba(0,0,0,.03);
+}
+thead {
+    border-bottom: 2px solid #dee2e6;
+}
+.table > :not(caption) > * > * {
+    border-bottom-width: 1px;
+}
+</style>
+{% endblock %}
