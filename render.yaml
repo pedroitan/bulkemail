@@ -57,4 +57,4 @@ services:
 databases:
   - name: emailbulk-db
     ipAllowList: []  # allow connections from everywhere
-    plan: small
+    plan: free
