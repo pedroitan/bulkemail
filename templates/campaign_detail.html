@@ -115,19 +115,19 @@
                 <div class="card-body">
                     <div class="row text-center">
                         <div class="col-6 mb-3">
-                            <div class="h4">{{ stats.sent|default(0) }}</div>
+                            <div class="h4">{{ delivery_stats.sent|default(0) }}</div>
                             <div class="text-muted">Sent</div>
                         </div>
                         <div class="col-6 mb-3">
-                            <div class="h4">{{ stats.delivered|default(0) }}</div>
+                            <div class="h4">{{ delivery_stats.delivered|default(0) }}</div>
                             <div class="text-muted">Delivered</div>
                         </div>
                         <div class="col-6 mb-3">
-                            <div class="h4">{{ stats.bounced|default(0) }}</div>
+                            <div class="h4">{{ delivery_stats.bounced|default(0) }}</div>
                             <div class="text-muted">Bounced</div>
                         </div>
                         <div class="col-6 mb-3">
-                            <div class="h4">{{ stats.complained|default(0) }}</div>
+                            <div class="h4">{{ delivery_stats.complained|default(0) }}</div>
                             <div class="text-muted">Complaints</div>
                         </div>
                     </div>
@@ -230,15 +230,23 @@ $(document).ready(function() {
             type: "GET",
             dataType: "json",
             success: function(data) {
-                updateRecipientsTable(data);
+                console.log("Received data:", data);
+                if (data && data.success && Array.isArray(data.recipients)) {
+                    // Directly pass just the recipients array
+                    updateRecipientsTable(data.recipients);
+                } else {
+                    console.error("Invalid response format or recipients not an array:", data);
+                    updateRecipientsTable([]); // Pass empty array to show "No data" message
+                }
             },
             error: function(jqXHR, textStatus, errorThrown) {
                 console.error("Error fetching recipients:", textStatus, errorThrown);
+                updateRecipientsTable([]); // Pass empty array on error
             }
         });
     }
     
-    function updateRecipientsTable(recipients) {
+    function updateRecipientsTable(data) {
         const tableBody = $("#recipientsTableBody");
         if (!tableBody.length) {
             return;
@@ -246,6 +254,38 @@ $(document).ready(function() {
         
         // Clear existing rows
         tableBody.empty();
+        
+        // Handle both possible input formats:
+        // 1. The data might be the recipients array directly
+        // 2. The data might be the full response object with recipients inside
+        let recipients;
+        
+        if (Array.isArray(data)) {
+            // Case 1: data is already the recipients array
+            recipients = data;
+        } else if (data && data.recipients && Array.isArray(data.recipients)) {
+            // Case 2: data is the full response object
+            recipients = data.recipients;
+        } else {
+            // Neither format is valid, show an error
+            console.warn("Invalid data format for recipients:", data);
+            tableBody.append(
+                $("<tr></tr>").append(
+                    $("<td colspan='3' class='text-center'></td>").text("No recipient data available")
+                )
+            );
+            return;
+        }
+        
+        // If we have zero recipients, show a message
+        if (recipients.length === 0) {
+            tableBody.append(
+                $("<tr></tr>").append(
+                    $("<td colspan='3' class='text-center'></td>").text("No recipients found")
+                )
+            );
+            return;
+        }
         
         // Add rows for each recipient
         recipients.forEach(function(recipient) {
