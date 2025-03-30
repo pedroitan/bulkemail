@@ -31,7 +31,7 @@ services:
     buildFilter:
       paths:
         - requirements.txt
-    preDeployCommand: "flask db upgrade"
+    preDeployCommand: "python init_db.py"
 
 databases:
   - name: emailbulk-db

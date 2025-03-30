@@ -5,6 +5,7 @@ This script will create all necessary database tables based on the SQLAlchemy mo
 """
 import os
 import sys
+import time
 
 # Add current directory to path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -14,17 +15,30 @@ from models import EmailCampaign, EmailRecipient
 
 def init_db():
     """Initialize the database by creating all tables"""
+    print("Starting database initialization...")
+    
+    # Get application instance
     app = get_app()
+    
+    # If we're using PostgreSQL, give it a moment to be ready
+    if 'postgresql' in os.environ.get('DATABASE_URL', ''):
+        print("PostgreSQL detected, waiting for 5 seconds to ensure database is ready...")
+        time.sleep(5)
+    
+    # Initialize database within app context
     with app.app_context():
+        print("Creating database tables...")
         db.create_all()
         print("Database initialized successfully!")
         
-        # Check if tables were created using the modern SQLAlchemy API
-        from sqlalchemy import text
-        with db.engine.connect() as conn:
-            result = conn.execute(text("SELECT name FROM sqlite_master WHERE type='table'"))
-            tables = result.fetchall()
-            print(f"Created tables: {', '.join([table[0] for table in tables if not table[0].startswith('sqlite_')])}")
+        # Check if tables were created
+        try:
+            from sqlalchemy import text, inspect
+            inspector = inspect(db.engine)
+            tables = inspector.get_table_names()
+            print(f"Created tables: {', '.join(tables)}")
+        except Exception as e:
+            print(f"Warning: Could not verify tables due to: {e}")
         
         return True
 
