@@ -56,4 +56,4 @@ services:
 
 databases:
   - name: emailbulk-db
-    plan: starter
+    plan: standard
