@@ -74,7 +74,20 @@ def create_app(config_object='config.Config'):
     app.config['MAX_EMAILS_PER_SECOND'] = int(os.environ.get('MAX_EMAILS_PER_SECOND', 10))
     
     # Set up SQLAlchemy database
-    app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///app.db')
+    db_url = os.environ.get('DATABASE_URL', 'sqlite:///app.db')
+    
+    # Fix for PostgreSQL SSL connections (especially on Render)
+    if db_url.startswith('postgresql'):
+        logging.info("PostgreSQL connection detected. Configuring SSL parameters.")
+        # Modify the connection URL to include SSL parameters
+        if '?' in db_url:
+            db_url = f"{db_url}&sslmode=require"
+        else:
+            db_url = f"{db_url}?sslmode=require"
+        
+        logging.info(f"Modified database URL: {db_url.replace(os.environ.get('DATABASE_URL', ''), '[REDACTED]')}")
+    
+    app.config['SQLALCHEMY_DATABASE_URI'] = db_url
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     
     # Ensure the instance folder exists
@@ -1236,10 +1249,7 @@ def create_app(config_object='config.Config'):
             email = data.get('email')
             
             if not email:
-                return jsonify({
-                    'success': False,
-                    'message': 'Email address is required'
-                })
+                return jsonify({'success': False, 'message': 'Email address is required'})
             
             # Create a test recipient in the database so we can track bounces
             test_recipient = EmailRecipient.query.filter_by(
