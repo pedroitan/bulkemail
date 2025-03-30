@@ -79,13 +79,36 @@ def create_app(config_object='config.Config'):
     # Fix for PostgreSQL SSL connections (especially on Render)
     if db_url.startswith('postgresql'):
         logging.info("PostgreSQL connection detected. Configuring SSL parameters.")
-        # Modify the connection URL to include SSL parameters
-        if '?' in db_url:
-            db_url = f"{db_url}&sslmode=require"
-        else:
-            db_url = f"{db_url}?sslmode=require"
         
-        logging.info(f"Modified database URL: {db_url.replace(os.environ.get('DATABASE_URL', ''), '[REDACTED]')}")
+        # Create a proper connection URL with comprehensive SSL parameters
+        from urllib.parse import urlparse, parse_qs, urlencode
+        
+        # Parse the existing URL
+        parsed_url = urlparse(db_url)
+        
+        # Get existing query parameters if any
+        query_params = parse_qs(parsed_url.query)
+        
+        # Set SSL parameters with fallbacks to defaults
+        query_params['sslmode'] = ['prefer']  # Start with 'prefer' instead of 'require'
+        
+        # Build the query string
+        query_string = urlencode(query_params, doseq=True)
+        
+        # Reconstruct the URL with updated query string
+        db_url = f"{parsed_url.scheme}://{parsed_url.netloc}{parsed_url.path}?{query_string}"
+        
+        # Configure SQLAlchemy engine creation parameters
+        app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+            'connect_args': {
+                'options': '-c statement_timeout=60000'  # 60 seconds timeout
+            },
+            'pool_pre_ping': True,  # Health check the connection before using it
+            'pool_recycle': 300,    # Recycle connections after 5 minutes
+            'pool_timeout': 30      # Wait max 30 seconds for a connection
+        }
+        
+        logging.info(f"Modified database URL with SSL parameters. Using sslmode=prefer")
     
     app.config['SQLALCHEMY_DATABASE_URI'] = db_url
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
