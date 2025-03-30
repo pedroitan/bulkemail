@@ -21,10 +21,10 @@ app = get_app()
 with app.app_context():
     logger.info("Starting Email Scheduler worker process")
     
-    # Get scheduler instance
+    # Get scheduler instance using the lazy initialization pattern
     scheduler = app.get_scheduler()
     
-    # Initialize the scheduler if needed
+    # Initialize the scheduler if needed - this respects the lazy initialization pattern
     if not scheduler.scheduler or not scheduler.scheduler.running:
         scheduler.init_scheduler(app)
     
