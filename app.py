@@ -23,6 +23,9 @@ from dotenv import load_dotenv
 from email_tracking import init_tracking
 from email_verification import EmailVerifier
 
+# Load environment variables from .env file immediately
+load_dotenv()
+
 def create_app(config_object='config.Config'):
     """
     Create and configure the Flask application.
@@ -34,51 +37,16 @@ def create_app(config_object='config.Config'):
     Returns:
         Flask application instance
     """
-    # Load environment based on FLASK_ENV
-    flask_env = os.environ.get('FLASK_ENV', 'development')
-    env_file = f'.env.{flask_env}' if os.path.exists(f'.env.{flask_env}') else '.env'
-    
-    if os.path.exists(env_file):
-        load_dotenv(env_file, override=True)
-        logging.info(f"Loaded environment from {env_file}")
-    
     # Report errors to Sentry if available
     try:
         import sentry_sdk
-        from sentry_sdk.integrations.flask import FlaskIntegration
-        
-        if os.environ.get('SENTRY_DSN'):
-            sentry_sdk.init(
-                dsn=os.environ.get('SENTRY_DSN'),
-                integrations=[FlaskIntegration()],
-                traces_sample_rate=0.5
-            )
-    except ImportError:
+        sentry_sdk.init(
+            dsn=os.environ.get('SENTRY_DSN'),
+            traces_sample_rate=1.0
+        )
+    except (ImportError, Exception):
         pass
-    
-    # Create Flask app
-    app = Flask(__name__)
-    
-    # Configure the database URL - handle Render's postgres:// format
-    database_url = os.environ.get('DATABASE_URL')
-    if database_url and database_url.startswith('postgres://'):
-        # Render provides PostgreSQL URLs that start with postgres://
-        # but SQLAlchemy 1.4+ wants postgresql://
-        database_url = database_url.replace('postgres://', 'postgresql://', 1)
-    
-    # Configure the application
-    app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'your-secret-key')
-    app.config['SQLALCHEMY_DATABASE_URI'] = database_url or os.environ.get('DATABASE_URL', 'sqlite:///campaigns.db')
-    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-    app.config['UPLOAD_FOLDER'] = '/tmp'
-    
-    # AWS credentials from environment variables
-    app.config['AWS_ACCESS_KEY_ID'] = os.environ.get('AWS_ACCESS_KEY_ID')
-    app.config['AWS_SECRET_ACCESS_KEY'] = os.environ.get('AWS_SECRET_ACCESS_KEY')
-    app.config['AWS_REGION'] = os.environ.get('AWS_REGION')
-    app.config['SENDER_EMAIL'] = os.environ.get('SENDER_EMAIL')
-    app.config['SES_CONFIGURATION_SET'] = os.environ.get('SES_CONFIGURATION_SET')
-
+        
     # Setup logging with more detail
     logging.basicConfig(
         level=logging.INFO,
@@ -93,6 +61,28 @@ def create_app(config_object='config.Config'):
     # Add the handler to the root logger
     logging.getLogger('').addHandler(console_handler)
 
+    # Create and configure the app
+    app = Flask(__name__, instance_relative_config=True)
+    app.config.from_object(config_object)
+    
+    # Configure application from environment variables
+    app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'default-dev-key')
+    app.config['AWS_ACCESS_KEY_ID'] = os.environ.get('AWS_ACCESS_KEY_ID', '')
+    app.config['AWS_SECRET_ACCESS_KEY'] = os.environ.get('AWS_SECRET_ACCESS_KEY', '')
+    app.config['AWS_REGION'] = os.environ.get('AWS_REGION', 'us-east-1')
+    app.config['SENDER_EMAIL'] = os.environ.get('SENDER_EMAIL', '')
+    app.config['MAX_EMAILS_PER_SECOND'] = int(os.environ.get('MAX_EMAILS_PER_SECOND', 10))
+    
+    # Set up SQLAlchemy database
+    app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///app.db')
+    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    
+    # Ensure the instance folder exists
+    try:
+        os.makedirs(app.instance_path)
+    except OSError:
+        pass
+    
     # Initialize database
     db.init_app(app)
     
@@ -1295,9 +1285,6 @@ def create_app(config_object='config.Config'):
                 subject=f"[TEST] {campaign.subject}",
                 body_html=html_content,
                 body_text=text_content,
-                sender=campaign.sender_email,  # Use the campaign's sender email
-                sender_name=campaign.sender_name,
-                tracking_enabled=True,
                 campaign_id=campaign_id,
                 recipient_id=test_recipient.id
             )
@@ -1503,6 +1490,124 @@ def create_app(config_object='config.Config'):
             app.logger.error(f"Error sending test email via form: {str(e)}")
             flash(f'Error sending test email: {str(e)}', 'danger')
             return redirect(url_for('campaign_detail', campaign_id=campaign_id))
+    
+    # Add a batch processing endpoint for scheduled processing
+    @app.route('/api/process-emails', methods=['POST'])
+    def process_emails_api():
+        """
+        API endpoint to process a batch of pending emails.
+        
+        This endpoint can be called by a scheduler or cron job to process
+        emails even on Render's free tier without a dedicated worker.
+        
+        Returns:
+            JSON response with status and count of processed emails
+        """
+        # Check for optional authorization token
+        auth_token = request.headers.get('Authorization')
+        expected_token = os.environ.get('API_PROCESS_TOKEN')
+        
+        if expected_token and auth_token != f"Bearer {expected_token}":
+            return jsonify({"status": "error", "message": "Unauthorized"}), 401
+        
+        try:
+            # Process a batch of emails
+            count = process_pending_emails(limit=10)
+            return jsonify({
+                "status": "success",
+                "processed": count,
+                "timestamp": datetime.now().isoformat()
+            })
+        except Exception as e:
+            app.logger.error(f"Error processing emails: {str(e)}")
+            return jsonify({
+                "status": "error",
+                "message": str(e),
+                "timestamp": datetime.now().isoformat()
+            }), 500
+
+    def process_pending_emails(limit=10):
+        """
+        Process a batch of pending emails from campaigns.
+        
+        Args:
+            limit: Maximum number of emails to process in this batch
+        
+        Returns:
+            Count of processed emails
+        """
+        count = 0
+        
+        # Get campaigns that are in progress
+        campaigns = EmailCampaign.query.filter_by(status='in_progress').all()
+        
+        for campaign in campaigns:
+            # Get pending recipients for this campaign
+            recipients = EmailRecipient.query.filter_by(
+                campaign_id=campaign.id,
+                status='pending'
+            ).limit(limit - count).all()
+            
+            if not recipients:
+                continue
+            
+            # Get email service
+            email_service = app.get_email_service()
+            
+            # Process each recipient
+            for recipient in recipients:
+                try:
+                    # Get recipient's custom data
+                    custom_data = {}
+                    if hasattr(recipient, 'custom_data') and recipient.custom_data:
+                        try:
+                            custom_data = json.loads(recipient.custom_data)
+                        except:
+                            pass
+                    
+                    # Prepare template data with recipient info
+                    template_data = {
+                        'name': custom_data.get('name', ''),
+                        'email': recipient.email,
+                        **custom_data  # Include all custom data as template variables
+                    }
+                    
+                    # Replace template variables in HTML content
+                    body_html = campaign.body_html
+                    for key, value in template_data.items():
+                        placeholder = "{{" + key + "}}"
+                        body_html = body_html.replace(placeholder, str(value))
+                    
+                    # Send the email
+                    email_service.send_email(
+                        recipient=recipient.email,
+                        subject=campaign.subject,
+                        body_html=body_html,
+                        body_text=campaign.body_text,
+                        campaign_id=campaign.id,
+                        recipient_id=recipient.id
+                    )
+                    
+                    # Update recipient status
+                    recipient.status = 'sent'
+                    db.session.commit()
+                    count += 1
+                    
+                except Exception as e:
+                    app.logger.error(f"Error sending to {recipient.email}: {str(e)}")
+                    recipient.status = 'failed'
+                    recipient.error_message = str(e)
+                    db.session.commit()
+        
+        return count
+
+    # Enable scheduler in the web process if configured
+    if os.environ.get('SCHEDULER_ENABLED', 'false').lower() == 'true':
+        app.logger.info("Initializing scheduler in web process")
+        with app.app_context():
+            scheduler = app.get_scheduler()
+            scheduler.init_scheduler(app)
+            app.logger.info(f"Scheduler initialized and running: {scheduler.scheduler.running}")
     
     # Error handlers
     @app.errorhandler(404)
