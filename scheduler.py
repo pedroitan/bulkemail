@@ -187,7 +187,7 @@ def _execute_campaign(app, campaign_id):
         if failed_count > 0 and sent_count == 0:
             campaign.status = 'failed'
         elif failed_count > 0:
-            campaign.status = 'completed_with_errors'
+            campaign.status = 'completed_errors'  # Shortened from 'completed_with_errors'
         else:
             campaign.status = 'completed'
         
