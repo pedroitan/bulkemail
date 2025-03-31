@@ -161,7 +161,14 @@ class SESEmailService:
             # Add plain text body if provided
             if body_text:
                 email_args['Message']['Body']['Text'] = {'Data': body_text}
-            
+                
+            # For headers, we need to add them as custom ReplyToAddresses
+            # AWS SES v2 doesn't support custom headers directly in basic send_email
+            # So we'll simplify to just make sure our emails work reliably
+            if not no_return_path:
+                # Only add bounce notification path for tracked emails
+                email_args['ReturnPath'] = self.sender_email
+                
             # Initialize SES client
             self._ensure_client()
             
@@ -299,18 +306,13 @@ class SESEmailService:
             if body_text:
                 email_args['Message']['Body']['Text'] = {'Data': body_text}
                 
-            # Add headers to help avoid Gmail promotions tab
-            headers = [
-                {'Name': 'X-Priority', 'Value': '1'},
-                {'Name': 'Precedence', 'Value': 'high'},
-                {'Name': 'X-Auto-Response-Suppress', 'Value': 'OOF, AutoReply'},
-                {'Name': 'X-Entity-Ref-ID', 'Value': str(uuid.uuid4())},
-                {'Name': 'List-Unsubscribe-Post', 'Value': 'List-Unsubscribe=One-Click'}
-            ]
-            
-            # Headers need to be added to the Message part, not at the root level
-            email_args['Message']['Headers'] = headers
-            
+            # For headers, we need to add them as custom ReplyToAddresses
+            # AWS SES v2 doesn't support custom headers directly in basic send_email
+            # So we'll simplify to just make sure our emails work reliably
+            if not no_return_path:
+                # Only add bounce notification path for tracked emails
+                email_args['ReturnPath'] = self.sender_email
+                
             # If no_return_path is enabled, disable the configuration set and return path
             # to prevent SES from sending notifications for large campaigns
             if no_return_path:
