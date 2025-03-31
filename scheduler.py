@@ -133,10 +133,11 @@ def _execute_campaign(app, campaign_id):
                         **custom_data
                     }
                     
-                    # Turn off return path monitoring for large campaigns to reduce SNS load
-                    disable_tracking = total_recipients > 400  # Only disable for large campaigns
+                    # For large campaigns, we need to be extremely aggressive about disabling tracking
+                    # to prevent SNS notification overload and 502 errors
+                    disable_tracking = total_recipients > 100  # Lower threshold to 100 (was 400)
                     
-                    # Send email
+                    # Send the email
                     message_id = email_service.send_template_email(
                         recipient=recipient.email,
                         subject=campaign.subject,
