@@ -1488,6 +1488,11 @@ def create_app(config_object='config.Config'):
             
             # Get email service and send test email
             email_service = app.get_email_service()
+            
+            # Log the current environment variables for debugging
+            app.logger.info(f"Using sender email: {email_service.sender_email}")
+            app.logger.info(f"Using configuration set: {email_service.configuration_set}")
+            
             message_id = email_service.send_email(
                 recipient=test_email,
                 subject=f"TEST: {campaign.subject}",
@@ -1495,21 +1500,27 @@ def create_app(config_object='config.Config'):
                 body_text=campaign.body_text
             )
             
-            # Add this test email to the campaign's recipient list to track delivery status
-            test_recipient = EmailRecipient(
-                campaign_id=campaign.id,
-                email=test_email,
-                status='sent',
-                message_id=message_id,
-                delivery_status='sent',
-                sent_at=datetime.now()
-            )
-            db.session.add(test_recipient)
-            db.session.commit()
+            # Only add recipient record if email was actually sent
+            if message_id:
+                # Add this test email to the campaign's recipient list to track delivery status
+                test_recipient = EmailRecipient(
+                    campaign_id=campaign.id,
+                    email=test_email,
+                    status='sent',
+                    message_id=message_id,
+                    delivery_status='sent',
+                    sent_at=datetime.now()
+                )
+                db.session.add(test_recipient)
+                db.session.commit()
+                
+                app.logger.info(f"Test email sent to {test_email} with message_id={message_id}")
+                app.logger.info(f"Added test recipient to campaign {campaign.id} for status tracking")
+                flash(f'Test email sent to {test_email} and added to recipient list for tracking', 'success')
+            else:
+                app.logger.error(f"Failed to send test email to {test_email} - no message ID returned")
+                flash(f'Failed to send test email. Check logs for details.', 'danger')
             
-            app.logger.info(f"Test email sent to {test_email} with message_id={message_id}")
-            app.logger.info(f"Added test recipient to campaign {campaign.id} for status tracking")
-            flash(f'Test email sent to {test_email} and added to recipient list for tracking', 'success')
             return redirect(url_for('campaign_detail', campaign_id=campaign_id))
         except Exception as e:
             app.logger.error(f"Error sending test email via form: {str(e)}")
