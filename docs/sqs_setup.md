@@ -4,11 +4,12 @@ This guide explains how to set up Amazon SQS to handle SNS notifications from yo
 
 ## Benefits of Using SQS for SNS Notifications
 
-1. **No Data Loss**: Preserves all notifications instead of dropping 99.5% of them with aggressive filtering
+1. **No Data Loss**: Preserves all notifications instead of dropping them with aggressive filtering
 2. **Controlled Processing**: Process notifications at a rate Render's free tier can handle
 3. **Better Analytics**: Retain all email events including opens, clicks, and deliveries
-4. **Server Stability**: Prevents 502 Bad Gateway errors during large campaigns
-5. **Simplified Architecture**: Reduces the complexity of rate limiting logic
+4. **Server Stability**: Prevents 502 Bad Gateway errors during large campaigns (especially when sending 3,000+ emails)
+5. **Complementary to Rate Limiter**: Works alongside the token bucket rate limiter to provide multiple layers of protection
+6. **Compatible with Synchronous Processing**: Designed to work with the synchronous email sending process on Render's free tier
 
 ## AWS Setup Instructions
 
@@ -100,15 +101,21 @@ Replace:
    - SNS forwards these messages to your SQS queue
    - Your application processes messages from the queue at a controlled rate
 
-2. **Processing Rate Control**:
-   - Messages are processed in batches of 10 every minute
-   - Critical notifications (bounces, complaints) are still processed immediately
-   - Non-critical notifications (deliveries, opens, clicks) are processed from the queue
+2. **Multi-layered Protection System**:
+   - **Layer 1 - SNS Direct Processing**: When `SNS_DIRECT_DISABLED=true`, incoming SNS webhooks return 200 OK immediately without processing
+   - **Layer 2 - Token Bucket Rate Limiter**: For direct processing, the rate limiter ensures only critical notifications (bounces, complaints) are processed immediately
+   - **Layer 3 - SQS Queue**: All notifications are stored in SQS for later processing at a controlled rate
 
-3. **Implementation Details**:
+3. **Processing Rate Control**:
+   - Messages are processed in batches of 10 every minute
+   - Small delays (0.5 seconds) between processing each message
+   - Graceful error handling with automatic retries (messages stay in queue if processing fails)
+
+4. **Implementation Details**:
    - A scheduled job runs every minute to process SQS messages
-   - The `/api/process-sqs-queue` endpoint can also be manually triggered
+   - The job runs as a module-level function to avoid APScheduler serialization issues
    - Messages are automatically deleted after successful processing
+   - Works alongside the synchronous email processing implemented for Render's free tier
 
 ## Testing the Setup
 
@@ -127,13 +134,26 @@ Replace:
    - Check your `SQS_ENABLED` and `SQS_QUEUE_URL` environment variables
    - Verify SNS subscription status (should be "Confirmed")
    - Check SQS queue access policy
+   - Ensure the APScheduler is running (check logs for "Scheduler initialized and running: True")
 
 2. **Permission Issues**:
    - Ensure your AWS credentials have permissions for SQS operations
    - Check CloudWatch logs for specific error messages
 
 3. **Rate Limiting Still Occurring**:
-   - Set `SQS_ENABLED=true` to disable aggressive filtering
-   - Check scheduler is running properly
+   - Set `SQS_ENABLED=true` and `SNS_DIRECT_DISABLED=true` to route all processing through SQS
+   - Verify the token bucket rate limiter configuration
+   - Check if the scheduled job is running (logs should show "Processing X SQS messages from scheduled job")
 
-This setup will significantly improve your application's ability to handle large email campaigns and prevent 502 errors on Render's free tier.
+4. **Job Scheduling Issues**:
+   - If you encounter APScheduler serialization errors, ensure you're using the module-level approach
+   - Check if local/module imports in sqs_jobs.py are causing circular dependencies
+
+## Optimizing for Render's Free Tier
+
+This SQS setup works in conjunction with two other optimizations:
+
+1. **Synchronous Email Processing**: Campaigns are processed synchronously instead of using background workers
+2. **Token Bucket Rate Limiter**: Prioritizes critical notifications while limiting less important ones
+
+Together, these three systems provide a robust solution for sending large email campaigns (up to 40,000 emails) on Render's free tier without encountering 502 errors or getting campaigns stuck in "pending" status.

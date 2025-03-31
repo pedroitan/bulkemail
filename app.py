@@ -24,6 +24,7 @@ from datetime import datetime, timedelta
 from models import db, EmailCampaign, EmailRecipient
 from forms import CampaignForm, UploadRecipientsForm
 from email_service import SESEmailService
+import sqs_jobs  # Import the module containing SQS job functions
 from scheduler import EmailScheduler
 from utils import allowed_file, save_uploaded_file, preview_file_data, get_campaign_stats
 from dotenv import load_dotenv
@@ -2094,10 +2095,10 @@ def create_app(config_object='config.Config'):
             if app.config.get('SQS_ENABLED', False):
                 app.logger.info("Setting up scheduled SQS queue processing job")
                 
-                # Set up the scheduled job using a module-level function for serialization compatibility
+                # Set up the scheduled job using the function from sqs_jobs module
+                # This avoids serialization issues with APScheduler
                 scheduler.scheduler.add_job(
-                    func=process_sqs_queue_job,
-                    args=[app],
+                    func=sqs_jobs.process_sqs_queue_job,  # Reference the function from the sqs_jobs module
                     trigger='interval', 
                     seconds=60, 
                     id='process_sqs_queue',
@@ -2132,113 +2133,11 @@ def get_app():
     """
     return create_app()
 
-# Define module-level job function for APScheduler serialization compatibility
-def process_sqs_queue_job(app):
-    """Process SQS messages at a controlled rate compatible with Render's free tier"""
-    with app.app_context():
-        try:
-            # Process up to 10 messages per minute
-            sqs_handler = app.get_sqs_handler()
-            messages = sqs_handler.receive_messages(max_messages=10)
-            
-            if not messages:
-                return
-                
-            app.logger.info(f"Processing {len(messages)} SQS messages from scheduled job")
-            processed = 0
-            
-            for message in messages:
-                try:
-                    # Extract and process the SNS message
-                    receipt_handle = message['ReceiptHandle']
-                    body = json.loads(message['Body'])
-                    
-                    if 'Message' in body:
-                        sns_message = json.loads(body['Message'])
-                        notification_type = sns_message.get('notificationType') or sns_message.get('eventType')
-                        
-                        # Process based on notification type
-                        if notification_type == 'Bounce':
-                            handle_bounce_notification(sns_message)
-                        elif notification_type == 'Complaint':
-                            handle_complaint_notification(sns_message)
-                        elif notification_type == 'Delivery':
-                            handle_delivery_notification(sns_message)
-                        elif notification_type == 'DeliveryDelay':
-                            handle_delivery_delay_notification(sns_message)
-                        elif notification_type == 'Open':
-                            handle_open_notification(sns_message)
-                        elif notification_type == 'Click':
-                            handle_click_notification(sns_message)
-                            
-                    # Delete the message after successful processing
-                    sqs_handler.delete_message(receipt_handle)
-                    processed += 1
-                    
-                    # Add a small delay between messages to prevent overloading the server
-                    time.sleep(0.5)
-                    
-                except Exception as e:
-                    app.logger.error(f"Error processing SQS message: {str(e)}")
-            
-            app.logger.info(f"Successfully processed {processed} SQS messages")
-            
-        except Exception as e:
-            app.logger.error(f"Error in SQS queue processing job: {str(e)}")
+# SQS processing job is now imported from sqs_jobs.py
+# This avoids serialization issues with APScheduler
 
-# Define module-level job function for APScheduler serialization compatibility
-def process_sqs_queue_job(app):
-    """Process SQS messages at a controlled rate compatible with Render's free tier"""
-    with app.app_context():
-        try:
-            # Process up to 10 messages per minute
-            sqs_handler = app.get_sqs_handler()
-            messages = sqs_handler.receive_messages(max_messages=10)
-            
-            if not messages:
-                return
-                
-            app.logger.info(f"Processing {len(messages)} SQS messages from scheduled job")
-            processed = 0
-            
-            for message in messages:
-                try:
-                    # Extract and process the SNS message
-                    receipt_handle = message['ReceiptHandle']
-                    body = json.loads(message['Body'])
-                    
-                    if 'Message' in body:
-                        sns_message = json.loads(body['Message'])
-                        notification_type = sns_message.get('notificationType') or sns_message.get('eventType')
-                        
-                        # Process based on notification type
-                        if notification_type == 'Bounce':
-                            handle_bounce_notification(sns_message)
-                        elif notification_type == 'Complaint':
-                            handle_complaint_notification(sns_message)
-                        elif notification_type == 'Delivery':
-                            handle_delivery_notification(sns_message)
-                        elif notification_type == 'DeliveryDelay':
-                            handle_delivery_delay_notification(sns_message)
-                        elif notification_type == 'Open':
-                            handle_open_notification(sns_message)
-                        elif notification_type == 'Click':
-                            handle_click_notification(sns_message)
-                            
-                    # Delete the message after successful processing
-                    sqs_handler.delete_message(receipt_handle)
-                    processed += 1
-                    
-                    # Add a small delay between messages to prevent overloading the server
-                    time.sleep(0.5)
-                    
-                except Exception as e:
-                    app.logger.error(f"Error processing SQS message: {str(e)}")
-            
-            app.logger.info(f"Successfully processed {processed} SQS messages")
-            
-        except Exception as e:
-            app.logger.error(f"Error in SQS queue processing job: {str(e)}")
+# SQS processing job is now imported from sqs_jobs.py
+# This avoids serialization issues with APScheduler
 
 app = get_app()
 
