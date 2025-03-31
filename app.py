@@ -29,6 +29,7 @@ from utils import allowed_file, save_uploaded_file, preview_file_data, get_campa
 from dotenv import load_dotenv
 from email_tracking import init_tracking
 from email_verification import EmailVerifier
+from sqs_handler import SQSHandler
 
 # Load environment variables from .env file immediately
 load_dotenv()
@@ -134,6 +135,9 @@ def create_app(config_object='config.Config'):
     app.config['AWS_REGION'] = os.environ.get('AWS_REGION', 'us-east-1')
     app.config['SENDER_EMAIL'] = os.environ.get('SENDER_EMAIL', '')
     app.config['MAX_EMAILS_PER_SECOND'] = int(os.environ.get('MAX_EMAILS_PER_SECOND', 10))
+    app.config['SQS_QUEUE_URL'] = os.environ.get('SQS_QUEUE_URL', '')
+    app.config['SQS_ENABLED'] = os.environ.get('SQS_ENABLED', 'false').lower() == 'true'
+    app.config['SNS_DIRECT_DISABLED'] = os.environ.get('SNS_DIRECT_DISABLED', 'false').lower() == 'true'
     
     # Set up SQLAlchemy database
     db_url = os.environ.get('DATABASE_URL', 'sqlite:///app.db')
@@ -190,9 +194,10 @@ def create_app(config_object='config.Config'):
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
     
-    # Initialize email service and scheduler lazily
+    # Initialize email service, scheduler, and SQS handler lazily
     email_service = None
     scheduler = None
+    sqs_handler = None
     
     def get_email_service():
         """
@@ -220,10 +225,21 @@ def create_app(config_object='config.Config'):
             with app.app_context():
                 scheduler.init_scheduler(app)
         return scheduler
+        
+    def get_sqs_handler():
+        """
+        Get the SQS handler instance, creating it only when needed.
+        This implements lazy initialization to prevent Flask context errors.
+        """
+        nonlocal sqs_handler
+        if sqs_handler is None:
+            sqs_handler = SQSHandler()
+        return sqs_handler
     
     # Make these functions available to the application context
     app.get_email_service = get_email_service
     app.get_scheduler = get_scheduler
+    app.get_sqs_handler = get_sqs_handler
     
     # Initialize email tracking system
     with app.app_context():
@@ -753,6 +769,13 @@ def create_app(config_object='config.Config'):
     
     @app.route('/api/sns/ses-notification', methods=['POST'])
     def sns_notification_handler():
+        # If SNS_DIRECT_DISABLED is true, immediately return success
+        # This prevents direct SNS notifications from affecting the app while still allowing SQS processing
+        if app.config.get('SNS_DIRECT_DISABLED', False):
+            return jsonify({
+                'success': True, 
+                'message': 'Direct SNS notifications are disabled, notifications are processed via SQS'
+            }), 200
         """
         Handle AWS SNS notifications for email bounces, complaints, and deliveries.
         
@@ -760,19 +783,22 @@ def create_app(config_object='config.Config'):
         during large campaigns (up to 40k emails) when thousands of notifications arrive
         simultaneously. Key optimizations include:
         
-        1. Rate Limiting: Uses a token bucket algorithm to process at most 5 
+        1. SQS Queue Integration: When enabled, forwards notifications to an SQS queue
+           for asynchronous processing at a controlled rate, preserving all notification data
+        
+        2. Rate Limiting: Uses a token bucket algorithm to process at most 5 
            notifications per second with a 0.5/sec refill rate, preventing server overload
         
-        2. Priority Handling: Critical notifications (bounces, complaints) bypass 
+        3. Priority Handling: Critical notifications (bounces, complaints) bypass 
            rate limiting to ensure delivery issues are always tracked
         
-        3. Aggressive Filtering: Filters 99.5% of all non-critical notifications
-           (not just Send events) to drastically reduce server load
+        4. Aggressive Filtering: Filters 99.5% of all non-critical notifications
+           (not just Send events) to drastically reduce server load when SQS is disabled
         
-        4. 200 OK Responses: Always returns HTTP 200 even for rate-limited requests 
+        5. 200 OK Responses: Always returns HTTP 200 even for rate-limited requests 
            to prevent AWS from retrying, which would worsen server load
         
-        5. Error Tolerance: Catches and handles parsing errors gracefully to prevent
+        6. Error Tolerance: Catches and handles parsing errors gracefully to prevent
            notification processing failures
         
         These optimizations allow the system to handle extremely large campaigns (up to 40k emails)
@@ -849,6 +875,25 @@ def create_app(config_object='config.Config'):
             
             # Handle actual notification
             if notification_json.get('Type') == 'Notification':
+                # Check if SQS is enabled - if so, forward the notification to SQS queue
+                if app.config.get('SQS_ENABLED', False):
+                    try:
+                        # Forward the entire notification to SQS for async processing
+                        sqs_handler = app.get_sqs_handler()
+                        message_id = sqs_handler.send_message(notification_json)
+                        
+                        if message_id:
+                            app.logger.info(f"Forwarded SNS notification to SQS queue: {message_id}")
+                            return jsonify({
+                                'success': True, 
+                                'message': 'Notification forwarded to SQS for async processing'
+                            }), 200
+                    except Exception as e:
+                        app.logger.error(f"Error forwarding to SQS: {str(e)}", exc_info=True)
+                        # Fall back to direct processing if SQS forwarding fails
+                        app.logger.warning("Falling back to direct processing due to SQS error")
+                        # Continue with normal processing below
+                
                 # Parse the message payload before doing any logging or processing
                 # to quickly identify and handle Send events
                 try:
@@ -857,8 +902,8 @@ def create_app(config_object='config.Config'):
                     notification_type = message.get('notificationType') or message.get('eventType')
                     
                     # Ultra-aggressive handling for all non-critical events to prevent server overload
-                    # Skip almost all non-critical events for large campaigns
-                    if notification_type not in ['Bounce', 'Complaint']:
+                    # Only applied when SQS is disabled
+                    if not app.config.get('SQS_ENABLED', False) and notification_type not in ['Bounce', 'Complaint']:
                         # Skip 99.5% of all non-critical notifications to drastically reduce load
                         # This is necessary for handling campaigns with up to 40k recipients
                         if random.random() < 0.995:
@@ -1686,6 +1731,86 @@ def create_app(config_object='config.Config'):
                 'message': f'Error sending test email: {str(e)}'
             })
     
+    @app.route('/api/process-sqs-queue', methods=['GET'])
+    def process_sqs_queue():
+        """
+        Process messages from the SQS queue that contains SNS notifications.
+        
+        This endpoint is intended to be called periodically via a cron job or JavaScript
+        to control the rate at which notifications are processed, avoiding server overload
+        on Render's free tier during large campaigns (up to 40k emails).
+        
+        Benefits:
+        1. Preserves all notifications (unlike the token bucket which drops 99.5% of non-critical ones)
+        2. Processes notifications at a controlled rate to prevent 502 errors
+        3. Operates within Render's free tier performance constraints
+        4. Maintains handling of all notification types for better analytics
+        
+        Returns 200 OK with count of processed messages or error details.
+        """
+        if not app.config.get('SQS_ENABLED', False):
+            return jsonify({"status": "disabled", "message": "SQS processing is disabled"}), 200
+            
+        try:
+            sqs_handler = app.get_sqs_handler()
+            max_messages = request.args.get('max', 10, type=int)
+            if max_messages > 10:
+                max_messages = 10  # SQS API limit is 10
+                
+            # Get messages from queue
+            messages = sqs_handler.receive_messages(
+                max_messages=max_messages,
+                wait_time=1,
+                visibility_timeout=60  # 1 minute to process
+            )
+            
+            if not messages:
+                return jsonify({"status": "success", "processed": 0, "message": "No messages in queue"})
+                
+            # Process each message
+            processed_count = 0
+            for message in messages:
+                try:
+                    # Parse and handle SNS notification
+                    receipt_handle = message['ReceiptHandle']
+                    body = json.loads(message['Body'])
+                    
+                    # If this is an SNS message, extract the actual message
+                    if 'Message' in body:
+                        # For processing, use the existing notification handler logic
+                        sns_message = json.loads(body['Message'])
+                        notification_type = sns_message.get('notificationType') or sns_message.get('eventType')
+                        
+                        app.logger.info(f"Processing SQS message with notification type: {notification_type}")
+                        
+                        # Process the notification using existing handlers
+                        if notification_type == 'Bounce':
+                            handle_bounce_notification(sns_message)
+                        elif notification_type == 'Complaint':
+                            handle_complaint_notification(sns_message)
+                        elif notification_type == 'Delivery':
+                            handle_delivery_notification(sns_message)
+                        elif notification_type == 'DeliveryDelay':
+                            handle_delivery_delay_notification(sns_message)
+                        elif notification_type == 'Open':
+                            handle_open_notification(sns_message)
+                        elif notification_type == 'Click':
+                            handle_click_notification(sns_message)
+                    
+                    # Delete the message from the queue after processing
+                    sqs_handler.delete_message(receipt_handle)
+                    processed_count += 1
+                    
+                except Exception as e:
+                    app.logger.error(f"Error processing SQS message: {str(e)}", exc_info=True)
+                    # Continue with other messages
+            
+            return jsonify({"status": "success", "processed": processed_count})
+            
+        except Exception as e:
+            app.logger.error(f"Error processing SQS queue: {str(e)}", exc_info=True)
+            return jsonify({"status": "error", "message": str(e)}), 500
+    
     @app.route('/api/diagnostics/ses-config-set', methods=['GET'])
     def check_ses_config_set():
         """Check if the SES configuration set is accessible"""
@@ -1964,6 +2089,62 @@ def create_app(config_object='config.Config'):
             scheduler = app.get_scheduler()
             scheduler.init_scheduler(app)
             app.logger.info(f"Scheduler initialized and running: {scheduler.scheduler.running}")
+            
+            # Add SQS processing job if enabled
+            if app.config.get('SQS_ENABLED', False):
+                app.logger.info("Setting up scheduled SQS queue processing job")
+                
+                # Process SQS messages every minute
+                @scheduler.scheduler.scheduled_job('interval', id='process_sqs_queue', seconds=60)
+                def process_sqs_queue_job():
+                    """Process SQS messages at a controlled rate compatible with Render's free tier"""
+                    with app.app_context():
+                        try:
+                            # Process up to 10 messages per minute
+                            sqs_handler = app.get_sqs_handler()
+                            messages = sqs_handler.receive_messages(max_messages=10)
+                            
+                            if not messages:
+                                return
+                                
+                            app.logger.info(f"Processing {len(messages)} SQS messages from scheduled job")
+                            processed = 0
+                            
+                            for message in messages:
+                                try:
+                                    # Extract and process the SNS message
+                                    receipt_handle = message['ReceiptHandle']
+                                    body = json.loads(message['Body'])
+                                    
+                                    if 'Message' in body:
+                                        sns_message = json.loads(body['Message'])
+                                        notification_type = sns_message.get('notificationType') or sns_message.get('eventType')
+                                        
+                                        # Process based on notification type
+                                        if notification_type == 'Bounce':
+                                            handle_bounce_notification(sns_message)
+                                        elif notification_type == 'Complaint':
+                                            handle_complaint_notification(sns_message)
+                                        elif notification_type == 'Delivery':
+                                            handle_delivery_notification(sns_message)
+                                        elif notification_type == 'DeliveryDelay':
+                                            handle_delivery_delay_notification(sns_message)
+                                        elif notification_type == 'Open':
+                                            handle_open_notification(sns_message)
+                                        elif notification_type == 'Click':
+                                            handle_click_notification(sns_message)
+                                    
+                                    # Delete processed message
+                                    sqs_handler.delete_message(receipt_handle)
+                                    processed += 1
+                                    
+                                except Exception as e:
+                                    app.logger.error(f"Error processing SQS message: {str(e)}", exc_info=True)
+                            
+                            app.logger.info(f"Processed {processed} SQS messages")
+                            
+                        except Exception as e:
+                            app.logger.error(f"Error in SQS queue processing job: {str(e)}", exc_info=True)
     
     # Error handlers
     @app.errorhandler(404)

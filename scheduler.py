@@ -11,6 +11,7 @@ import re
 import json
 import pandas as pd
 import logging
+import time
 from datetime import datetime, timedelta
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, current_app
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -245,7 +246,6 @@ def _execute_campaign(app, campaign_id):
                     db.session.commit()
             
             # Introduce a small delay between batches
-            import time
             time.sleep(0.5)
             
             processed_count += batch_size
