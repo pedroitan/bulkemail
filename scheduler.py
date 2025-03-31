@@ -73,13 +73,19 @@ def _execute_campaign(app, campaign_id):
     This is the core implementation for campaign email sending that handles:
     
     1. Campaign status tracking and management
-    2. Recipient batching (100 recipients per batch) to prevent memory issues
-    3. Adaptive notification handling for large campaigns to prevent 502 errors
-    4. Synchronous processing of emails to ensure compatibility with Render's free tier
+    2. Dynamic batch sizing based on campaign size (50-100 recipients per batch)
+    3. Strategic delays between emails and rest periods between batches
+    4. Aggressive SES notification suppression for campaigns >50 recipients
+    5. Synchronous processing of emails to ensure compatibility with Render's free tier
     
-    For large campaigns (>100 recipients), this function automatically disables
-    SES notification tracking to prevent overwhelming the server with SNS notifications
-    that would otherwise cause 502 Bad Gateway errors.
+    For large campaigns (up to 40k emails), this function implements several optimizations:
+    - Smaller batch sizes (50 recipients) for very large campaigns (>10k emails)
+    - Scaled delays between individual emails (100-500ms based on campaign size)
+    - Rest periods between batches (1-5 seconds based on campaign size)
+    - Disabled SES notification tracking for all but small test campaigns (<50 recipients)
+    
+    These optimizations prevent 502 Bad Gateway errors on Render's free tier that would
+    otherwise occur due to SNS notification overload.
     
     Args:
         app (Flask): Flask application instance

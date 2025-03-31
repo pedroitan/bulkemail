@@ -46,10 +46,11 @@ class TokenBucketRateLimiter:
     1. Tokens are consumed when processing notifications
     2. Tokens are replenished at a fixed rate over time
     3. When tokens are depleted, requests are rate-limited
-    4. Critical notifications can bypass the rate limiting
+    4. Critical notifications bypass the rate limiting (Bounces, Complaints)
+    5. Non-critical notifications are aggressively filtered (99.5% drop rate)
     
-    Without this rate limiter, large campaigns (3,000+ emails) would trigger 
-    simultaneous notifications that could crash the server.
+    Without this rate limiter, large campaigns (up to 40k emails) would trigger 
+    simultaneous notifications that would overwhelm the server on Render's free tier.
     """
     def __init__(self, max_tokens, refill_rate):
         self.max_tokens = max_tokens  # Maximum number of tokens in the bucket
@@ -756,17 +757,17 @@ def create_app(config_object='config.Config'):
         Handle AWS SNS notifications for email bounces, complaints, and deliveries.
         
         This is a critical endpoint for tracking email status but can be overwhelmed
-        during large campaigns (1,000+ emails) when thousands of notifications arrive
+        during large campaigns (up to 40k emails) when thousands of notifications arrive
         simultaneously. Key optimizations include:
         
-        1. Rate Limiting: Uses a token bucket algorithm to process at most 10 
-           notifications per second, preventing server overload
+        1. Rate Limiting: Uses a token bucket algorithm to process at most 5 
+           notifications per second with a 0.5/sec refill rate, preventing server overload
         
         2. Priority Handling: Critical notifications (bounces, complaints) bypass 
            rate limiting to ensure delivery issues are always tracked
         
-        3. Send Event Filtering: Aggressively filters "Send" event notifications 
-           (skips 95%) as they're high volume but low importance
+        3. Aggressive Filtering: Filters 99.5% of all non-critical notifications
+           (not just Send events) to drastically reduce server load
         
         4. 200 OK Responses: Always returns HTTP 200 even for rate-limited requests 
            to prevent AWS from retrying, which would worsen server load
@@ -774,9 +775,9 @@ def create_app(config_object='config.Config'):
         5. Error Tolerance: Catches and handles parsing errors gracefully to prevent
            notification processing failures
         
-        These optimizations allow the system to handle large campaigns without 
-        experiencing 502 Bad Gateway errors that previously occurred when the server
-        was overwhelmed by simultaneous SNS notifications.
+        These optimizations allow the system to handle extremely large campaigns (up to 40k emails)
+        without experiencing 502 Bad Gateway errors that would otherwise occur when the server
+        is overwhelmed by simultaneous SNS notifications on Render's free tier.
         """
         try:
             # Enhanced logging
