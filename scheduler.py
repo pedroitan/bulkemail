@@ -44,128 +44,148 @@ def _run_campaign_job(campaign_id):
     Args:
         campaign_id: ID of the campaign to process
     """
-    from app import get_app
-    app = get_app()
+    # Check if we're already in an app context
+    from flask import current_app
     
-    with app.app_context():
-        try:
-            # Get campaign details
-            campaign = EmailCampaign.query.get(campaign_id)
-            if not campaign:
-                logging.error(f"Campaign {campaign_id} not found")
-                return
-            
-            # Set campaign start time
-            if not campaign.started_at:
-                campaign.started_at = datetime.now()
-                db.session.commit()
-            
-            # Log basic campaign info
-            logging.info(f"Processing campaign {campaign_id}: {campaign.name} (status: {campaign.status})")
-            
-            # Update campaign status
-            campaign.status = 'in_progress'
+    try:
+        # Test if we're in app context already
+        current_app._get_current_object()
+        app = current_app
+        in_context = True
+    except RuntimeError:
+        # Not in app context, create one
+        from app import get_app
+        app = get_app()
+        in_context = False
+    
+    # Execute within app context if we're not already in one
+    if not in_context:
+        with app.app_context():
+            return _execute_campaign(app, campaign_id)
+    else:
+        # Already in app context
+        return _execute_campaign(app, campaign_id)
+
+def _execute_campaign(app, campaign_id):
+    """Internal function to execute the campaign within an app context"""
+    try:
+        # Get campaign details
+        campaign = EmailCampaign.query.get(campaign_id)
+        if not campaign:
+            logging.error(f"Campaign {campaign_id} not found")
+            return
+        
+        # Set campaign start time
+        if not campaign.started_at:
+            campaign.started_at = datetime.now()
             db.session.commit()
-            
-            # Get recipients
-            recipients = EmailRecipient.query.filter_by(campaign_id=campaign_id, status='pending').all()
-            
-            # Log recipient count and detailed info
-            logging.info(f"Found {len(recipients)} pending recipients for campaign {campaign_id}")
-            
-            # Count all recipients by status
-            total_recipients = EmailRecipient.query.filter_by(campaign_id=campaign_id).count()
-            pending = EmailRecipient.query.filter_by(campaign_id=campaign_id, status='pending').count()
-            sent = EmailRecipient.query.filter_by(campaign_id=campaign_id, status='sent').count()
-            failed = EmailRecipient.query.filter_by(campaign_id=campaign_id, status='failed').count()
-            
-            logging.info(f"Campaign {campaign_id} recipient breakdown - Total: {total_recipients}, Pending: {pending}, Sent: {sent}, Failed: {failed}")
-            
-            # Get email service
-            email_service = app.get_email_service()
-            
-            # Process each recipient
-            for recipient in recipients:
-                try:
-                    # Get recipient's custom data
-                    custom_data = {}
-                    if hasattr(recipient, 'custom_data') and recipient.custom_data:
-                        custom_data = json.loads(recipient.custom_data)
-                    
-                    # Prepare template data with recipient info
-                    template_data = {
-                        'name': recipient.name or '',
-                        'email': recipient.email,
-                        **custom_data
-                    }
-                    
-                    # Send email
-                    message_id = email_service.send_template_email(
-                        recipient=recipient.email,
-                        subject=campaign.subject,
-                        template_html=campaign.body_html,
-                        template_text=campaign.body_text,
-                        template_data=template_data,
-                        sender_name=campaign.sender_name,
-                        sender=campaign.sender_email  # Add the sender email from the campaign
-                    )
-                    
-                    # Update recipient status
-                    if message_id:
-                        recipient.status = 'sent'
-                        recipient.sent_at = datetime.now()
-                        
-                        # Store the message ID for bounce tracking
-                        # AWS might return message IDs with angle brackets - remove them for consistent storage
-                        if message_id.startswith('<') and message_id.endswith('>'):
-                            message_id = message_id[1:-1]
-                        
-                        recipient.message_id = message_id
-                        
-                        # Initialize delivery_status to 'sent'
-                        # This will be updated to 'delivered' by SNS notification handlers
-                        recipient.delivery_status = 'sent'
-                        
-                        logging.info(f"Email sent to {recipient.email}, message ID: {message_id}")
-                    else:
-                        recipient.status = 'failed'
-                        recipient.error_message = 'Failed to send email'
-                        logging.error(f"Failed to send email to {recipient.email}: {recipient.error_message}")
-                    
-                    db.session.commit()
-                    
-                except Exception as e:
-                    logging.error(f"Error sending to {recipient.email}: {str(e)}")
-                    recipient.status = 'failed'
-                    recipient.error_message = str(e)
-                    db.session.commit()
-            
-            # Update campaign status
-            sent_count = EmailRecipient.query.filter_by(campaign_id=campaign_id, status='sent').count()
-            failed_count = EmailRecipient.query.filter_by(campaign_id=campaign_id, status='failed').count()
-            
-            if failed_count > 0 and sent_count == 0:
-                campaign.status = 'failed'
-            elif failed_count > 0:
-                campaign.status = 'completed_with_errors'
-            else:
-                campaign.status = 'completed'
-            
-            campaign.completed_at = datetime.now()
-            db.session.commit()
-            
-            logging.info(f"Campaign {campaign_id} completed: {sent_count} sent, {failed_count} failed")
-            
-        except Exception as e:
-            logging.error(f"Error running campaign {campaign_id}: {str(e)}")
+        
+        # Log basic campaign info
+        logging.info(f"Processing campaign {campaign_id}: {campaign.name} (status: {campaign.status})")
+        
+        # Update campaign status
+        campaign.status = 'in_progress'
+        db.session.commit()
+        
+        # Get recipients
+        recipients = EmailRecipient.query.filter_by(campaign_id=campaign_id, status='pending').all()
+        
+        # Log recipient count and detailed info
+        logging.info(f"Found {len(recipients)} pending recipients for campaign {campaign_id}")
+        
+        # Count all recipients by status
+        total_recipients = EmailRecipient.query.filter_by(campaign_id=campaign_id).count()
+        pending = EmailRecipient.query.filter_by(campaign_id=campaign_id, status='pending').count()
+        sent = EmailRecipient.query.filter_by(campaign_id=campaign_id, status='sent').count()
+        failed = EmailRecipient.query.filter_by(campaign_id=campaign_id, status='failed').count()
+        
+        logging.info(f"Campaign {campaign_id} recipient breakdown - Total: {total_recipients}, Pending: {pending}, Sent: {sent}, Failed: {failed}")
+        
+        # Get email service
+        email_service = app.get_email_service()
+        
+        # Process each recipient
+        for recipient in recipients:
             try:
-                campaign = EmailCampaign.query.get(campaign_id)
-                if campaign:
-                    campaign.status = 'failed'
-                    campaign.completed_at = datetime.now()
-                    db.session.commit()
-            except Exception as inner_e:
-                logging.error(f"Error updating campaign status: {str(inner_e)}")
+                # Get recipient's custom data
+                custom_data = {}
+                if hasattr(recipient, 'custom_data') and recipient.custom_data:
+                    custom_data = json.loads(recipient.custom_data)
+                
+                # Prepare template data with recipient info
+                template_data = {
+                    'name': recipient.name or '',
+                    'email': recipient.email,
+                    **custom_data
+                }
+                
+                # Send email
+                message_id = email_service.send_template_email(
+                    recipient=recipient.email,
+                    subject=campaign.subject,
+                    template_html=campaign.body_html,
+                    template_text=campaign.body_text,
+                    template_data=template_data,
+                    sender_name=campaign.sender_name,
+                    sender=campaign.sender_email  # Add the sender email from the campaign
+                )
+                
+                # Update recipient status
+                if message_id:
+                    recipient.status = 'sent'
+                    recipient.sent_at = datetime.now()
+                    
+                    # Store the message ID for bounce tracking
+                    # AWS might return message IDs with angle brackets - remove them for consistent storage
+                    if message_id.startswith('<') and message_id.endswith('>'):
+                        message_id = message_id[1:-1]
+                    
+                    recipient.message_id = message_id
+                    
+                    # Initialize delivery_status to 'sent'
+                    # This will be updated to 'delivered' by SNS notification handlers
+                    recipient.delivery_status = 'sent'
+                    
+                    logging.info(f"Email sent to {recipient.email}, message ID: {message_id}")
+                else:
+                    recipient.status = 'failed'
+                    recipient.error_message = 'Failed to send email'
+                    logging.error(f"Failed to send email to {recipient.email}: {recipient.error_message}")
+                
+                db.session.commit()
+                
+            except Exception as e:
+                logging.error(f"Error sending to {recipient.email}: {str(e)}")
+                recipient.status = 'failed'
+                recipient.error_message = str(e)
+                db.session.commit()
+        
+        # Update campaign status
+        sent_count = EmailRecipient.query.filter_by(campaign_id=campaign_id, status='sent').count()
+        failed_count = EmailRecipient.query.filter_by(campaign_id=campaign_id, status='failed').count()
+        
+        if failed_count > 0 and sent_count == 0:
+            campaign.status = 'failed'
+        elif failed_count > 0:
+            campaign.status = 'completed_with_errors'
+        else:
+            campaign.status = 'completed'
+        
+        campaign.completed_at = datetime.now()
+        db.session.commit()
+        
+        logging.info(f"Campaign {campaign_id} completed: {sent_count} sent, {failed_count} failed")
+        
+    except Exception as e:
+        logging.error(f"Error running campaign {campaign_id}: {str(e)}")
+        try:
+            campaign = EmailCampaign.query.get(campaign_id)
+            if campaign:
+                campaign.status = 'failed'
+                campaign.completed_at = datetime.now()
+                db.session.commit()
+        except Exception as inner_e:
+            logging.error(f"Error updating campaign status: {str(inner_e)}")
 
 class EmailScheduler:
     """
@@ -263,30 +283,17 @@ class EmailScheduler:
     def send_campaign(self, campaign):
         """Manually send a campaign immediately"""
         try:
-            self.logger.info(f"Manually sending campaign {campaign.id}: {campaign.name}")
+            self.logger.info(f"Sending campaign {campaign.id} synchronously")
             
-            # Make sure we have a scheduler initialized
-            if not self.scheduler:
-                self.logger.warning("Scheduler not initialized, initializing now...")
-                self.init_scheduler()
+            # Run the campaign job directly instead of scheduling it
+            # This will process the campaign synchronously
+            result = _run_campaign_job(campaign.id)
             
-            # Schedule the job to run immediately in a background thread
-            job_id = f"campaign_{campaign.id}"
-            self.scheduler.add_job(
-                _run_campaign_job,
-                args=[campaign.id],
-                id=job_id,
-                replace_existing=True,
-                trigger='date',
-                run_date=datetime.now() + timedelta(seconds=1)  # Run almost immediately
-            )
-            
-            self.logger.info(f"Campaign {campaign.id} scheduled to run immediately with job ID: {job_id}")
-            return job_id
+            self.logger.info(f"Campaign {campaign.id} processed synchronously. Result: {result}")
+            return f"Campaign {campaign.id} sent synchronously"
         except Exception as e:
-            self.logger.error(f"Error scheduling campaign {campaign.id} to run: {str(e)}")
-            # Fall back to direct execution if scheduling fails
-            return _run_campaign_job(campaign.id)
+            self.logger.error(f"Error sending campaign {campaign.id}: {str(e)}")
+            raise
     
     def load_recipients_from_file(self, campaign_id, file_path):
         """
