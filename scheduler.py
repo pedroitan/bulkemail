@@ -67,7 +67,27 @@ def _run_campaign_job(campaign_id):
         return _execute_campaign(app, campaign_id)
 
 def _execute_campaign(app, campaign_id):
-    """Internal function to execute the campaign within an app context"""
+    """
+    Internal function to execute the campaign within an app context.
+    
+    This is the core implementation for campaign email sending that handles:
+    
+    1. Campaign status tracking and management
+    2. Recipient batching (100 recipients per batch) to prevent memory issues
+    3. Adaptive notification handling for large campaigns to prevent 502 errors
+    4. Synchronous processing of emails to ensure compatibility with Render's free tier
+    
+    For large campaigns (>100 recipients), this function automatically disables
+    SES notification tracking to prevent overwhelming the server with SNS notifications
+    that would otherwise cause 502 Bad Gateway errors.
+    
+    Args:
+        app (Flask): Flask application instance
+        campaign_id (int): ID of the campaign to process
+        
+    Returns:
+        dict: Status report of the sending process
+    """
     try:
         # Get campaign details
         campaign = EmailCampaign.query.get(campaign_id)
@@ -105,8 +125,15 @@ def _execute_campaign(app, campaign_id):
         # Get email service
         email_service = app.get_email_service()
         
-        # Process recipients in batches of 100
-        batch_size = 100
+        # Process recipients in smaller batches for larger campaigns
+        # This helps prevent memory issues and server timeouts on Render
+        if total_recipients > 10000:  # For very large campaigns (10k-40k)
+            batch_size = 50  # Smallest batch size for enormous campaigns
+        elif total_recipients > 5000:  # For large campaigns (5k-10k)
+            batch_size = 75  # Slightly larger batch size
+        else:  # For normal campaigns
+            batch_size = 100  # Default batch size
+            
         processed_count = 0
         batch_count = 0
         
@@ -119,6 +146,22 @@ def _execute_campaign(app, campaign_id):
             logging.info(f"Processing batch {batch_count}: recipients {processed_count+1} to {batch_end} (batch size: {len(current_batch)})")
             
             # Process each recipient in the current batch
+            # Add a rest period between batches for very large campaigns
+            # This gives the server time to process SNS notifications and prevents timeouts
+            if batch_count > 1 and total_recipients > 1000:  # Only add rest after first batch
+                rest_seconds = 0
+                if total_recipients > 20000:  # For extremely large campaigns (20k-40k)
+                    rest_seconds = 5  # 5 second rest between batches
+                elif total_recipients > 10000:  # For very large campaigns (10k-20k)
+                    rest_seconds = 3  # 3 second rest between batches
+                elif total_recipients > 5000:  # For large campaigns (5k-10k)
+                    rest_seconds = 2  # 2 second rest between batches
+                else:  # For medium campaigns (1k-5k)
+                    rest_seconds = 1  # 1 second rest between batches
+                    
+                logging.info(f"Resting for {rest_seconds} seconds between batches to prevent server overload")
+                time.sleep(rest_seconds)
+                
             for recipient in current_batch:
                 try:
                     # Get recipient's custom data
@@ -134,8 +177,13 @@ def _execute_campaign(app, campaign_id):
                     }
                     
                     # For large campaigns, we need to be extremely aggressive about disabling tracking
-                    # to prevent SNS notification overload and 502 errors
-                    disable_tracking = total_recipients > 100  # Lower threshold to 100 (was 400)
+                    # to prevent SNS notification overload and 502 errors.
+                    # Since we need to handle up to 40k emails, we disable the return path tracking 
+                    # for ALL campaigns except very small test campaigns (<50 recipients).
+                    # This prevents SES from sending delivery notifications to our SNS endpoint.
+                    # We also add a small delay between emails for extremely large campaigns to 
+                    # prevent overwhelming both SES and our server.
+                    disable_tracking = total_recipients > 50  # Always disable tracking for non-test campaigns
                     
                     # Send the email
                     message_id = email_service.send_template_email(
@@ -172,6 +220,17 @@ def _execute_campaign(app, campaign_id):
                         logging.error(f"Failed to send email to {recipient.email}: {recipient.error_message}")
                     
                     db.session.commit()
+                    
+                    # Add a small delay for extremely large campaigns to avoid overwhelming SES and the server
+                    # The larger the campaign, the more aggressive the delay needs to be
+                    if total_recipients > 1000:
+                        # Scale delay based on campaign size
+                        if total_recipients > 10000:  # For campaigns over 10k emails
+                            time.sleep(0.5)  # 500ms delay between emails for very large campaigns
+                        elif total_recipients > 5000:  # For campaigns of 5k-10k emails
+                            time.sleep(0.25)  # 250ms delay
+                        else:  # For campaigns of 1k-5k emails
+                            time.sleep(0.1)  # 100ms delay
                     
                 except Exception as e:
                     logging.error(f"Error sending to {recipient.email}: {str(e)}")
