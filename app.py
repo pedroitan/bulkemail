@@ -1489,6 +1489,9 @@ def create_app(config_object='config.Config'):
             # Get email service and send test email
             email_service = app.get_email_service()
             
+            # Ensure the email service is properly initialized with sender email
+            email_service._ensure_client()
+            
             # Log the current environment variables for debugging
             app.logger.info(f"Using sender email: {email_service.sender_email}")
             app.logger.info(f"Using configuration set: {email_service.configuration_set}")
