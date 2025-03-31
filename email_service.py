@@ -270,12 +270,12 @@ class SESEmailService:
             
             # Render template with provided data
             template = Template(template_html)
-            body_html = template.render(**template_data)
+            body_html = template.safe_substitute(**template_data)
             
             body_text = None
             if template_text:
                 text_template = Template(template_text)
-                body_text = text_template.render(**template_data)
+                body_text = text_template.safe_substitute(**template_data)
             
             # Prepare email message
             email_args = {
