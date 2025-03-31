@@ -138,6 +138,7 @@ def create_app(config_object='config.Config'):
     app.config['MAX_EMAILS_PER_SECOND'] = int(os.environ.get('MAX_EMAILS_PER_SECOND', 10))
     app.config['SQS_QUEUE_URL'] = os.environ.get('SQS_QUEUE_URL', '')
     app.config['SQS_ENABLED'] = os.environ.get('SQS_ENABLED', 'false').lower() == 'true'
+    app.config['SQS_REGION'] = os.environ.get('SQS_REGION', app.config['AWS_REGION'])
     app.config['SNS_DIRECT_DISABLED'] = os.environ.get('SNS_DIRECT_DISABLED', 'false').lower() == 'true'
     
     # Set up SQLAlchemy database

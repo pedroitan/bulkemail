@@ -65,7 +65,41 @@ Replace:
 
 5. Click "Save"
 
-### Step 3: Subscribe the SQS Queue to the SNS Topic
+### Step 3: Add Required IAM Permissions
+
+1. Navigate to the IAM service in AWS Management Console
+2. Go to the "Policies" section and click "Create Policy"
+3. Switch to the JSON editor and enter the following policy (replace with your actual values):
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "sqs:SendMessage",
+        "sqs:ReceiveMessage",
+        "sqs:DeleteMessage",
+        "sqs:GetQueueAttributes",
+        "sqs:GetQueueUrl"
+      ],
+      "Resource": "arn:aws:sqs:REGION:ACCOUNT_ID:QUEUE_NAME"
+    }
+  ]
+}
+```
+
+Replace:
+- `REGION` with your AWS region (e.g., `us-east-2`)
+- `ACCOUNT_ID` with your AWS account ID
+- `QUEUE_NAME` with the name of your SQS queue
+
+4. Name your policy (e.g., "EmailBulkSQSPermissions") and create it
+5. Go to the "Users" section, select your user
+6. Click "Add permissions" and attach your newly created policy
+
+### Step 4: Subscribe the SQS Queue to the SNS Topic
 
 1. Navigate to the SNS service in AWS Management Console
 2. Select your topic for SES notifications
@@ -75,13 +109,14 @@ Replace:
 6. Leave other settings at default values
 7. Click "Create subscription"
 
-### Step 4: Configure the Application
+### Step 5: Configure the Application
 
 1. Update your application's environment variables:
 
 ```
 SQS_ENABLED=true
 SQS_QUEUE_URL=https://sqs.REGION.amazonaws.com/ACCOUNT_ID/QUEUE_NAME
+SQS_REGION=REGION  # Make sure this matches your SQS queue region
 
 # Optionally disable direct SNS processing (recommended for Render free tier)
 SNS_DIRECT_DISABLED=true
@@ -130,11 +165,13 @@ Replace:
 
 ## Troubleshooting
 
-1. **No Messages Being Processed**:
-   - Check your `SQS_ENABLED` and `SQS_QUEUE_URL` environment variables
+1. **No Messages Being Processed or Access Denied Errors**:
+   - Check your `SQS_ENABLED`, `SQS_QUEUE_URL`, and `SQS_REGION` environment variables
    - Verify SNS subscription status (should be "Confirmed")
    - Check SQS queue access policy
    - Ensure the APScheduler is running (check logs for "Scheduler initialized and running: True")
+   - **IAM Permissions**: Verify your IAM user has the required permissions (sqs:ReceiveMessage, sqs:DeleteMessage, etc.)
+   - **Region Mismatch**: Ensure your `SQS_REGION` matches the region where your queue is created
 
 2. **Permission Issues**:
    - Ensure your AWS credentials have permissions for SQS operations

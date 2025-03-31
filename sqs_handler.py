@@ -51,7 +51,10 @@ class SQSHandler:
                 # In Flask application context, get from app config
                 self.aws_access_key_id = self.aws_access_key_id or current_app.config['AWS_ACCESS_KEY_ID']
                 self.aws_secret_access_key = self.aws_secret_access_key or current_app.config['AWS_SECRET_ACCESS_KEY']
-                self.region_name = self.region_name or current_app.config['AWS_REGION']
+                
+                # Use SQS_REGION if available, otherwise fall back to AWS_REGION
+                self.region_name = self.region_name or current_app.config.get('SQS_REGION') or current_app.config['AWS_REGION']
+                self.logger.info(f"Using SQS region: {self.region_name}")
                 
                 # Get queue URL from config
                 self.queue_url = current_app.config.get('SQS_QUEUE_URL')
