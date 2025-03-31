@@ -1185,14 +1185,26 @@ def create_app(config_object='config.Config'):
     @app.route('/tracking', methods=['GET'])
     def tracking_campaigns():
         """Show list of campaigns for tracking data"""
-        # Get all campaigns with completed status
-        campaigns = EmailCampaign.query.filter(
-            EmailCampaign.status.in_(['completed', 'sent', 'partially_sent'])
-        ).order_by(EmailCampaign.created_at.desc()).all()
+        # Get all campaigns with any status (previously only showed certain statuses)
+        campaigns = EmailCampaign.query.order_by(EmailCampaign.created_at.desc()).all()
+        
+        # Get counts for each campaign
+        campaign_data = []
+        for campaign in campaigns:
+            recipients = EmailRecipient.query.filter_by(campaign_id=campaign.id).all()
+            opens = sum(1 for r in recipients if r.open_count and r.open_count > 0)
+            clicks = sum(1 for r in recipients if r.click_count and r.click_count > 0)
+            
+            campaign_data.append({
+                'campaign': campaign,
+                'recipients': len(recipients),
+                'opens': opens,
+                'clicks': clicks
+            })
         
         return render_template(
             'tracking_campaigns.html',
-            campaigns=campaigns
+            campaigns=campaign_data
         )
     
     @app.route('/tracking/report/<int:campaign_id>', methods=['GET'])
