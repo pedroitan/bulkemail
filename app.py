@@ -26,6 +26,47 @@ from email_verification import EmailVerifier
 # Load environment variables from .env file immediately
 load_dotenv()
 
+# Add rate limiter for SNS notifications
+class TokenBucketRateLimiter:
+    """
+    A simple token bucket rate limiter to prevent endpoint overload
+    """
+    def __init__(self, max_tokens, refill_rate):
+        self.max_tokens = max_tokens  # Maximum number of tokens in the bucket
+        self.refill_rate = refill_rate  # Tokens refilled per second
+        self.tokens = max_tokens  # Current token count
+        self.last_refill_time = time.time()  # Last time tokens were refilled
+        self.lock = threading.Lock()  # Lock for thread safety
+    
+    def consume(self, tokens=1, bypass=False):
+        """
+        Consume tokens from the bucket
+        Returns True if tokens were consumed successfully, False otherwise
+        bypass=True will skip rate limiting
+        """
+        if bypass:
+            return True
+            
+        with self.lock:
+            self._refill()
+            if self.tokens >= tokens:
+                self.tokens -= tokens
+                return True
+            return False
+    
+    def _refill(self):
+        """Refill tokens based on elapsed time"""
+        now = time.time()
+        elapsed = now - self.last_refill_time
+        new_tokens = elapsed * self.refill_rate
+        if new_tokens > 0:
+            self.tokens = min(self.max_tokens, self.tokens + new_tokens)
+            self.last_refill_time = now
+
+# Initialize rate limiter with 10 tokens max, refilling at 1 token per second
+# These values can be adjusted based on your needs
+sns_rate_limiter = TokenBucketRateLimiter(max_tokens=10, refill_rate=1)
+
 def create_app(config_object='config.Config'):
     """
     Create and configure the Flask application.
@@ -785,6 +826,17 @@ def create_app(config_object='config.Config'):
                     
                     app.logger.info(f"Processing SES notification type: {notification_type}")
                     app.logger.info(f"Message details: {json.dumps(message)[:500]}...")
+                    
+                    # Determine if this is a critical notification that should bypass rate limiting
+                    is_critical = notification_type in ['Bounce', 'Complaint']
+                    
+                    # Apply rate limiting for non-critical notifications
+                    if not is_critical and not sns_rate_limiter.consume(tokens=1, bypass=False):
+                        app.logger.warning(f"Rate limited {notification_type} notification - too many requests")
+                        return jsonify({
+                            'success': True, 
+                            'message': f'Rate limited {notification_type} notification'
+                        }), 200  # Still return 200 so SNS doesn't retry
                     
                     # Handle different notification types
                     if notification_type == 'Bounce':
