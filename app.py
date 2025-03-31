@@ -810,7 +810,25 @@ def create_app(config_object='config.Config'):
             
             # Handle actual notification
             if notification_json.get('Type') == 'Notification':
-                # Log the full notification for debugging
+                # Parse the message payload before doing any logging or processing
+                # to quickly identify and handle Send events
+                try:
+                    message_str = notification_json.get('Message', '{}')
+                    message = json.loads(message_str)
+                    notification_type = message.get('notificationType') or message.get('eventType')
+                    
+                    # Ultra-aggressive handling for Send events which are causing worker timeouts
+                    # These events are extremely high volume and not critical for tracking
+                    if notification_type == 'Send':
+                        # Skip 95% of all Send notifications to reduce load
+                        if random.random() < 0.95:
+                            return jsonify({'success': True, 'message': 'Send notification acknowledged'}), 200
+                except Exception:
+                    # If we can't parse, continue with normal processing
+                    pass
+                    
+                # Log the full notification for debugging - only for non-Send events
+                # to reduce log volume
                 app.logger.info(f"Full notification: {json.dumps(notification_json)[:1000]}...")
                 
                 # Store the full notification in a log file for debugging
