@@ -362,7 +362,7 @@ class SESEmailService:
             return None
     
     def send_bulk_emails(self, recipients, subject, template_html, template_text=None, 
-                        sender=None, sender_name=None, rate_limit=10, tracking_enabled=True, campaign_id=None):
+                        sender=None, sender_name=None, rate_limit=3, tracking_enabled=True, campaign_id=None):
         """
         Send bulk emails with rate limiting
         
@@ -396,7 +396,12 @@ class SESEmailService:
             result['email'] = email
             results.append(result)
             
-            # Rate limiting
+            # Rate limiting with additional pauses every 30 emails to prevent overwhelming the server
             time.sleep(sleep_time)
+            
+            # Add a pause every 30 emails to let the server catch up
+            if len(results) % 30 == 0:
+                self.logger.info(f"Added 2-second pause after sending {len(results)} emails to prevent server overload")
+                time.sleep(2.0)
             
         return results

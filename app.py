@@ -86,9 +86,9 @@ class TokenBucketRateLimiter:
             self.tokens = min(self.max_tokens, self.tokens + new_tokens)
             self.last_refill_time = now
 
-# Initialize rate limiter with 5 tokens max, refilling at 0.5 tokens per second
-# These values are optimized for Render's free tier with large campaigns (up to 40k emails)
-sns_rate_limiter = TokenBucketRateLimiter(max_tokens=5, refill_rate=0.5)
+# Initialize rate limiter with fewer tokens and slower refill rate to prevent 502 errors
+# These values are further optimized for Render's free tier with large campaigns
+sns_rate_limiter = TokenBucketRateLimiter(max_tokens=3, refill_rate=0.3)
 
 def create_app(config_object='config.Config'):
     """
@@ -903,11 +903,11 @@ def create_app(config_object='config.Config'):
                     notification_type = message.get('notificationType') or message.get('eventType')
                     
                     # Ultra-aggressive handling for all non-critical events to prevent server overload
-                    # Only applied when SQS is disabled
-                    if not app.config.get('SQS_ENABLED', False) and notification_type not in ['Bounce', 'Complaint']:
-                        # Skip 99.5% of all non-critical notifications to drastically reduce load
-                        # This is necessary for handling campaigns with up to 40k recipients
-                        if random.random() < 0.995:
+                    # Applied even with SQS enabled for extra protection
+                    if notification_type not in ['Bounce', 'Complaint']:
+                        # Skip 99.8% of all non-critical notifications to drastically reduce load
+                        # This provides an additional safeguard alongside SQS processing
+                        if random.random() < 0.998:
                             return jsonify({'success': True, 'message': f'{notification_type} notification acknowledged'}), 200
                 except Exception:
                     # If we can't parse, continue with normal processing
