@@ -91,74 +91,94 @@ def _execute_campaign(app, campaign_id):
         recipients = EmailRecipient.query.filter_by(campaign_id=campaign_id, status='pending').all()
         
         # Log recipient count and detailed info
-        logging.info(f"Found {len(recipients)} pending recipients for campaign {campaign_id}")
+        total_recipients = len(recipients)
+        logging.info(f"Found {total_recipients} pending recipients for campaign {campaign_id}")
         
         # Count all recipients by status
-        total_recipients = EmailRecipient.query.filter_by(campaign_id=campaign_id).count()
+        total_all = EmailRecipient.query.filter_by(campaign_id=campaign_id).count()
         pending = EmailRecipient.query.filter_by(campaign_id=campaign_id, status='pending').count()
         sent = EmailRecipient.query.filter_by(campaign_id=campaign_id, status='sent').count()
         failed = EmailRecipient.query.filter_by(campaign_id=campaign_id, status='failed').count()
         
-        logging.info(f"Campaign {campaign_id} recipient breakdown - Total: {total_recipients}, Pending: {pending}, Sent: {sent}, Failed: {failed}")
+        logging.info(f"Campaign {campaign_id} recipient breakdown - Total: {total_all}, Pending: {pending}, Sent: {sent}, Failed: {failed}")
         
         # Get email service
         email_service = app.get_email_service()
         
-        # Process each recipient
-        for recipient in recipients:
-            try:
-                # Get recipient's custom data
-                custom_data = {}
-                if hasattr(recipient, 'custom_data') and recipient.custom_data:
-                    custom_data = json.loads(recipient.custom_data)
-                
-                # Prepare template data with recipient info
-                template_data = {
-                    'name': recipient.name or '',
-                    'email': recipient.email,
-                    **custom_data
-                }
-                
-                # Send email
-                message_id = email_service.send_template_email(
-                    recipient=recipient.email,
-                    subject=campaign.subject,
-                    template_html=campaign.body_html,
-                    template_text=campaign.body_text,
-                    template_data=template_data,
-                    sender_name=campaign.sender_name,
-                    sender=campaign.sender_email  # Add the sender email from the campaign
-                )
-                
-                # Update recipient status
-                if message_id:
-                    recipient.status = 'sent'
-                    recipient.sent_at = datetime.now()
+        # Process recipients in batches of 100
+        batch_size = 100
+        processed_count = 0
+        batch_count = 0
+        
+        while processed_count < total_recipients:
+            # Determine current batch end
+            batch_end = min(processed_count + batch_size, total_recipients)
+            current_batch = recipients[processed_count:batch_end]
+            batch_count += 1
+            
+            logging.info(f"Processing batch {batch_count}: recipients {processed_count+1} to {batch_end} (batch size: {len(current_batch)})")
+            
+            # Process each recipient in the current batch
+            for recipient in current_batch:
+                try:
+                    # Get recipient's custom data
+                    custom_data = {}
+                    if hasattr(recipient, 'custom_data') and recipient.custom_data:
+                        custom_data = json.loads(recipient.custom_data)
                     
-                    # Store the message ID for bounce tracking
-                    # AWS might return message IDs with angle brackets - remove them for consistent storage
-                    if message_id.startswith('<') and message_id.endswith('>'):
-                        message_id = message_id[1:-1]
+                    # Prepare template data with recipient info
+                    template_data = {
+                        'name': recipient.name or '',
+                        'email': recipient.email,
+                        **custom_data
+                    }
                     
-                    recipient.message_id = message_id
+                    # Send email
+                    message_id = email_service.send_template_email(
+                        recipient=recipient.email,
+                        subject=campaign.subject,
+                        template_html=campaign.body_html,
+                        template_text=campaign.body_text,
+                        template_data=template_data,
+                        sender_name=campaign.sender_name,
+                        sender=campaign.sender_email  # Add the sender email from the campaign
+                    )
                     
-                    # Initialize delivery_status to 'sent'
-                    # This will be updated to 'delivered' by SNS notification handlers
-                    recipient.delivery_status = 'sent'
+                    # Update recipient status
+                    if message_id:
+                        recipient.status = 'sent'
+                        recipient.sent_at = datetime.now()
+                        
+                        # Store the message ID for bounce tracking
+                        # AWS might return message IDs with angle brackets - remove them for consistent storage
+                        if message_id.startswith('<') and message_id.endswith('>'):
+                            message_id = message_id[1:-1]
+                        
+                        recipient.message_id = message_id
+                        
+                        # Initialize delivery_status to 'sent'
+                        # This will be updated to 'delivered' by SNS notification handlers
+                        recipient.delivery_status = 'sent'
+                        
+                        logging.info(f"Email sent to {recipient.email}, message ID: {message_id}")
+                    else:
+                        recipient.status = 'failed'
+                        recipient.error_message = 'Failed to send email'
+                        logging.error(f"Failed to send email to {recipient.email}: {recipient.error_message}")
                     
-                    logging.info(f"Email sent to {recipient.email}, message ID: {message_id}")
-                else:
+                    db.session.commit()
+                    
+                except Exception as e:
+                    logging.error(f"Error sending to {recipient.email}: {str(e)}")
                     recipient.status = 'failed'
-                    recipient.error_message = 'Failed to send email'
-                    logging.error(f"Failed to send email to {recipient.email}: {recipient.error_message}")
-                
-                db.session.commit()
-                
-            except Exception as e:
-                logging.error(f"Error sending to {recipient.email}: {str(e)}")
-                recipient.status = 'failed'
-                recipient.error_message = str(e)
-                db.session.commit()
+                    recipient.error_message = str(e)
+                    db.session.commit()
+            
+            # Introduce a small delay between batches
+            import time
+            time.sleep(0.5)
+            
+            processed_count += batch_size
         
         # Update campaign status
         sent_count = EmailRecipient.query.filter_by(campaign_id=campaign_id, status='sent').count()
