@@ -151,6 +151,7 @@
                             <th>Email</th>
                             <th>Status</th>
                             <th>Delivery Status</th>
+                            <th>Tracking Pixel</th>
                         </tr>
                     </thead>
                     <tbody id="recipientsTableBody">
@@ -169,6 +170,16 @@
                                 <span class="badge bg-primary">Sent</span>
                                 {% else %}
                                 <span class="badge bg-secondary">{{ recipient.delivery_status }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if recipient.open_count and recipient.open_count > 0 %}
+                                <span class="badge bg-success">Opened ({{ recipient.open_count }})</span>
+                                {% if recipient.last_opened_at %}
+                                <br><small class="text-muted">{{ recipient.last_opened_at.strftime('%Y-%m-%d %H:%M') }}</small>
+                                {% endif %}
+                                {% else %}
+                                <span class="badge bg-secondary">Not opened</span>
                                 {% endif %}
                             </td>
                         </tr>
@@ -282,6 +293,33 @@
                 );
                 
                 row.append(deliveryStatusCell);
+                
+                // Tracking pixel status
+                const trackingPixelCell = $("<td></td>");
+                
+                if (recipient.open_count && recipient.open_count > 0) {
+                    trackingPixelCell.append(
+                        $("<span></span>")
+                            .addClass("badge bg-success")
+                            .text("Opened (" + recipient.open_count + ")")
+                    );
+                    
+                    if (recipient.last_opened_at) {
+                        trackingPixelCell.append(
+                            $("<br><small></small>")
+                                .addClass("text-muted")
+                                .text(new Date(recipient.last_opened_at).toLocaleString())
+                        );
+                    }
+                } else {
+                    trackingPixelCell.append(
+                        $("<span></span>")
+                            .addClass("badge bg-secondary")
+                            .text("Not opened")
+                    );
+                }
+                
+                row.append(trackingPixelCell);
                 
                 // Add to table
                 tableBody.append(row);
