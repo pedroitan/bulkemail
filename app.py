@@ -757,6 +757,9 @@ def create_app(config_object='config.Config'):
             
             # Handle actual notification
             if notification_json.get('Type') == 'Notification':
+                # Log the full notification for debugging
+                app.logger.info(f"Full notification: {json.dumps(notification_json)[:1000]}...")
+                
                 # Store the full notification in a log file for debugging
                 try:
                     with open('ses_notifications.log', 'a') as f:
@@ -768,10 +771,15 @@ def create_app(config_object='config.Config'):
                 
                 # Parse the message payload
                 try:
-                    message = json.loads(notification_json.get('Message', '{}'))
-                    notification_type = message.get('notificationType')
+                    message_str = notification_json.get('Message', '{}')
+                    app.logger.info(f"Message string: {message_str[:500]}...")
+                    
+                    message = json.loads(message_str)
+                    # Try both notificationType and eventType as AWS SES uses both formats
+                    notification_type = message.get('notificationType') or message.get('eventType')
                     
                     app.logger.info(f"Processing SES notification type: {notification_type}")
+                    app.logger.info(f"Message details: {json.dumps(message)[:500]}...")
                     
                     # Handle different notification types
                     if notification_type == 'Bounce':
@@ -796,198 +804,169 @@ def create_app(config_object='config.Config'):
     
     def handle_bounce_notification(message):
         """Handle bounce notifications from SES"""
+        app.logger.info("==== HANDLING BOUNCE NOTIFICATION ====")
         bounce_info = message.get('bounce', {})
         bounce_type = bounce_info.get('bounceType')
         bounce_subtype = bounce_info.get('bounceSubType')
+        
+        app.logger.info(f"Bounce type: {bounce_type}, subtype: {bounce_subtype}")
+        
+        # Get the message ID from the mail object
+        mail_obj = message.get('mail', {})
+        message_id = mail_obj.get('messageId')
+        app.logger.info(f"Message ID from notification: {message_id}")
+        
+        # Log all bounced recipients
         bounce_recipients = bounce_info.get('bouncedRecipients', [])
-        bounce_timestamp = bounce_info.get('timestamp')
-        
-        if bounce_timestamp:
-            bounce_time = datetime.fromisoformat(bounce_timestamp.replace('Z', '+00:00'))
-        else:
-            bounce_time = datetime.now()
-        
-        message_id = message.get('mail', {}).get('messageId')
-        app.logger.info(f"Processing bounce notification for message ID: {message_id}")
+        app.logger.info(f"Bounced recipients: {bounce_recipients}")
         
         # Process each bounced recipient
-        for recipient in bounce_recipients:
-            email = recipient.get('emailAddress')
-            diagnostic = recipient.get('diagnosticCode', '')
-            
-            # Find the recipient in the database
-            recipients = EmailRecipient.query.filter_by(message_id=message_id, email=email).all()
-            if not recipients:
-                # Try to find by email if message_id is not found
-                recipients = EmailRecipient.query.filter_by(email=email).all()
-            
-            for recipient_record in recipients:
-                app.logger.info(f"Updating bounce status for {email} in campaign {recipient_record.campaign_id}")
+        for recipient_info in bounce_recipients:
+            email = recipient_info.get('emailAddress')
+            if not email:
+                app.logger.warning("No email address found in bounce recipient info")
+                continue
                 
-                # Update the recipient record with bounce information
-                recipient_record.delivery_status = 'bounced'
-                recipient_record.bounce_type = bounce_type
-                recipient_record.bounce_subtype = bounce_subtype
-                recipient_record.bounce_time = bounce_time
-                recipient_record.bounce_diagnostic = diagnostic
-                
-                # Also update the status for clarity
-                if bounce_type == 'Permanent':
-                    recipient_record.status = 'failed'
-                    recipient_record.error_message = f"Permanent bounce: {diagnostic}"
+            app.logger.info(f"Processing bounce notification for message ID: {message_id}")
+            app.logger.info(f"Updating bounce status for {email} in campaign")
+            
+            # Find the recipient record
+            recipient_record = EmailRecipient.query.filter_by(message_id=message_id, email=email).first()
+            
+            if not recipient_record:
+                app.logger.warning(f"No recipient found with message ID {message_id} and email {email}")
+                # Try to find by email only as fallback
+                recipient_record = EmailRecipient.query.filter_by(email=email).order_by(EmailRecipient.id.desc()).first()
+                if recipient_record:
+                    app.logger.info(f"Found recipient by email only (fallback): {recipient_record.id}")
                 else:
-                    recipient_record.status = 'failed'
-                    recipient_record.error_message = f"Temporary bounce: {diagnostic}"
+                    app.logger.error(f"Could not find any recipient with email {email}")
+                    continue
+            else:
+                app.logger.info(f"Found recipient with matching message ID and email: {recipient_record.id}")
+                
+            # Update the recipient status
+            original_status = recipient_record.delivery_status
+            recipient_record.delivery_status = 'bounced'
+            recipient_record.status = 'failed'
+            recipient_record.bounce_type = bounce_type
+            recipient_record.bounce_subtype = bounce_subtype
+            recipient_record.bounce_time = datetime.now()
+            recipient_record.error_message = recipient_info.get('diagnosticCode')
             
-            if recipients:
+            app.logger.info(f"Updated bounce status for {email} from '{original_status}' to 'bounced'")
+            
+            # Commit the changes
+            try:
                 db.session.commit()
                 app.logger.info(f"Updated bounce status for {email}")
-            else:
-                app.logger.warning(f"Could not find recipient record for bounced email: {email}")
+            except Exception as e:
+                db.session.rollback()
+                app.logger.error(f"Error updating bounce status: {str(e)}")
     
     def handle_complaint_notification(message):
         """Handle complaint notifications from SES"""
+        app.logger.info("==== HANDLING COMPLAINT NOTIFICATION ====")
         complaint_info = message.get('complaint', {})
-        complaint_recipients = complaint_info.get('complainedRecipients', [])
-        complaint_timestamp = complaint_info.get('timestamp')
-        complaint_type = complaint_info.get('complaintFeedbackType', 'unknown')
+        complaint_type = complaint_info.get('complaintFeedbackType')
         
-        if complaint_timestamp:
-            complaint_time = datetime.fromisoformat(complaint_timestamp.replace('Z', '+00:00'))
-        else:
-            complaint_time = datetime.now()
+        app.logger.info(f"Complaint type: {complaint_type}")
         
-        message_id = message.get('mail', {}).get('messageId')
-        app.logger.info(f"Processing complaint notification for message ID: {message_id}")
+        # Get the message ID from the mail object
+        mail_obj = message.get('mail', {})
+        message_id = mail_obj.get('messageId')
+        app.logger.info(f"Message ID from notification: {message_id}")
         
-        # Process each complaining recipient
-        for recipient in complaint_recipients:
-            email = recipient.get('emailAddress')
-            
-            # Find the recipient in the database
-            recipients = EmailRecipient.query.filter_by(message_id=message_id, email=email).all()
-            if not recipients:
-                # Try to find by email if message_id is not found
-                recipients = EmailRecipient.query.filter_by(email=email).all()
-            
-            for recipient_record in recipients:
-                app.logger.info(f"Updating complaint status for {email} in campaign {recipient_record.campaign_id}")
+        # Log all complained recipients
+        complained_recipients = complaint_info.get('complainedRecipients', [])
+        app.logger.info(f"Complained recipients: {complained_recipients}")
+        
+        # Process each complained recipient
+        for recipient_info in complained_recipients:
+            email = recipient_info.get('emailAddress')
+            if not email:
+                app.logger.warning("No email address found in complaint recipient info")
+                continue
                 
-                # Update the recipient record with complaint information
-                recipient_record.delivery_status = 'complained'
-                recipient_record.bounce_type = 'complaint'
-                recipient_record.bounce_subtype = complaint_type
-                recipient_record.bounce_time = complaint_time
-                
-                # Also update the status for clarity
-                recipient_record.status = 'failed'
-                recipient_record.error_message = f"Complaint: {complaint_type}"
+            app.logger.info(f"Processing complaint notification for message ID: {message_id}")
+            app.logger.info(f"Updating complaint status for {email} in campaign")
             
-            if recipients:
+            # Find the recipient record
+            recipient_record = EmailRecipient.query.filter_by(message_id=message_id, email=email).first()
+            
+            if not recipient_record:
+                app.logger.warning(f"No recipient found with message ID {message_id} and email {email}")
+                # Try to find by email only as fallback
+                recipient_record = EmailRecipient.query.filter_by(email=email).order_by(EmailRecipient.id.desc()).first()
+                if recipient_record:
+                    app.logger.info(f"Found recipient by email only (fallback): {recipient_record.id}")
+                else:
+                    app.logger.error(f"Could not find any recipient with email {email}")
+                    continue
+            else:
+                app.logger.info(f"Found recipient with matching message ID and email: {recipient_record.id}")
+                
+            # Update the recipient status
+            original_status = recipient_record.delivery_status
+            recipient_record.delivery_status = 'complained'
+            recipient_record.complaint_time = datetime.now()
+            
+            app.logger.info(f"Updated complaint status for {email} from '{original_status}' to 'complained'")
+            
+            # Commit the changes
+            try:
                 db.session.commit()
                 app.logger.info(f"Updated complaint status for {email}")
-            else:
-                app.logger.warning(f"Could not find recipient record for complaint email: {email}")
+            except Exception as e:
+                db.session.rollback()
+                app.logger.error(f"Error updating complaint status: {str(e)}")
     
     def handle_delivery_notification(message):
-        """Handle successful delivery notifications from SES"""
-        try:
-            delivery_info = message.get('delivery', {})
-            recipients = delivery_info.get('recipients', [])
-            delivery_timestamp = delivery_info.get('timestamp')
+        """Handle delivery notifications from SES"""
+        app.logger.info("==== HANDLING DELIVERY NOTIFICATION ====")
+        delivery_info = message.get('delivery', {})
+        
+        # Get the message ID from the mail object
+        mail_obj = message.get('mail', {})
+        message_id = mail_obj.get('messageId')
+        app.logger.info(f"Message ID from notification: {message_id}")
+        
+        # Log all recipients
+        recipients = delivery_info.get('recipients', [])
+        app.logger.info(f"Delivered recipients: {recipients}")
+        
+        for email in recipients:
+            app.logger.info(f"Processing delivery notification for {email} with message ID: {message_id}")
             
-            # Add detailed logging for troubleshooting
-            app.logger.info(f"Delivery info: {delivery_info}")
-            app.logger.info(f"Recipients in delivery notification: {recipients}")
+            # Find the recipient record
+            recipient_record = EmailRecipient.query.filter_by(message_id=message_id, email=email).first()
             
-            if delivery_timestamp:
-                delivery_time = datetime.fromisoformat(delivery_timestamp.replace('Z', '+00:00'))
+            if not recipient_record:
+                app.logger.warning(f"No recipient found with message ID {message_id} and email {email}")
+                # Try to find by email only as fallback
+                recipient_record = EmailRecipient.query.filter_by(email=email).order_by(EmailRecipient.id.desc()).first()
+                if recipient_record:
+                    app.logger.info(f"Found recipient by email only (fallback): {recipient_record.id}")
+                else:
+                    app.logger.error(f"Could not find any recipient with email {email}")
+                    continue
             else:
-                delivery_time = datetime.now()
-            
-            mail_info = message.get('mail', {})
-            message_id = mail_info.get('messageId')
-            app.logger.info(f"Processing delivery notification for message ID: {message_id}")
-            
-            # Additional logging to help debug
-            source_email = mail_info.get('source')
-            destination = mail_info.get('destination')
-            app.logger.info(f"Email was from {source_email} to {destination}")
-            
-            # Special handling for SES message IDs - they might have enclosing angle brackets
-            # AWS sometimes sends them with angle brackets, but our DB stores them without
-            if message_id and message_id.startswith('<') and message_id.endswith('>'):
-                clean_message_id = message_id[1:-1]
-                app.logger.info(f"Cleaned message ID from {message_id} to {clean_message_id}")
-                message_id = clean_message_id
-            
-            updated_count = 0
-            
-            # Process each successfully delivered recipient
-            for email in recipients:
-                # First try with exact message ID match
-                recipient_records = EmailRecipient.query.filter_by(message_id=message_id, email=email).all()
+                app.logger.info(f"Found recipient with matching message ID and email: {recipient_record.id}")
                 
-                # If not found by message ID, try just the email
-                if not recipient_records:
-                    app.logger.info(f"Recipient {email} not found by message ID {message_id}, trying email only")
-                    # Look for pending or sent emails to this address
-                    recipient_records = EmailRecipient.query.filter_by(email=email).filter(
-                        EmailRecipient.status.in_(['pending', 'sent'])
-                    ).all()
-                
-                for recipient_record in recipient_records:
-                    app.logger.info(f"Updating delivery status for {email} in campaign {recipient_record.campaign_id}")
-                    
-                    # Update the recipient record with delivery information
-                    recipient_record.delivery_status = 'delivered'
-                    
-                    # Make sure the status is 'sent'
-                    if recipient_record.status != 'sent':
-                        recipient_record.status = 'sent'
-                        recipient_record.sent_at = delivery_time
-                    
-                    # Store the message ID if it wasn't already set
-                    if not recipient_record.message_id:
-                        recipient_record.message_id = message_id
-                    
-                    updated_count += 1
-                
-                if recipient_records:
-                    db.session.commit()
-                    app.logger.info(f"Updated delivery status for {email}")
-                else:
-                    app.logger.warning(f"Could not find recipient record for delivered email: {email}")
+            # Update the recipient status
+            original_status = recipient_record.delivery_status
+            recipient_record.delivery_status = 'delivered'
+            recipient_record.delivery_time = datetime.now()
             
-            app.logger.info(f"Updated delivery status for {updated_count} recipients")
+            app.logger.info(f"Updated delivery status for {email} from '{original_status}' to 'delivered'")
             
-            # If we didn't find any recipients by exact match, try a more flexible approach
-            if updated_count == 0:
-                app.logger.info("No recipient matches found, trying a more flexible approach")
-                
-                # Try to update most recent recipients with matching emails
-                recent_recipients = EmailRecipient.query.filter(
-                    EmailRecipient.email.in_(recipients),
-                    EmailRecipient.status.in_(['pending', 'sent']),
-                    EmailRecipient.delivery_status.in_(['sent', None])
-                ).order_by(EmailRecipient.created_at.desc()).limit(len(recipients)).all()
-                
-                if recent_recipients:
-                    for recipient in recent_recipients:
-                        recipient.delivery_status = 'delivered'
-                        app.logger.info(f"Flexibly updated delivery status for {recipient.email}")
-                        updated_count += 1
-                    
-                    db.session.commit()
-                    app.logger.info(f"Flexibly updated {updated_count} recipients")
-                else:
-                    app.logger.warning("Could not find any matching recipients for delivery notification")
-            
-            # Successfully handled the notification
-            return True
-        except Exception as e:
-            app.logger.error(f"Error handling delivery notification: {str(e)}", exc_info=True)
-            return False
+            # Commit the changes
+            try:
+                db.session.commit()
+                app.logger.info(f"Updated delivery status for {email}")
+            except Exception as e:
+                db.session.rollback()
+                app.logger.error(f"Error updating delivery status: {str(e)}")
     
     @app.route('/reports/bounces')
     def bounce_report():
@@ -1516,8 +1495,21 @@ def create_app(config_object='config.Config'):
                 body_text=campaign.body_text
             )
             
+            # Add this test email to the campaign's recipient list to track delivery status
+            test_recipient = EmailRecipient(
+                campaign_id=campaign.id,
+                email=test_email,
+                status='sent',
+                message_id=message_id,
+                delivery_status='sent',
+                sent_at=datetime.now()
+            )
+            db.session.add(test_recipient)
+            db.session.commit()
+            
             app.logger.info(f"Test email sent to {test_email} with message_id={message_id}")
-            flash(f'Test email sent to {test_email}', 'success')
+            app.logger.info(f"Added test recipient to campaign {campaign.id} for status tracking")
+            flash(f'Test email sent to {test_email} and added to recipient list for tracking', 'success')
             return redirect(url_for('campaign_detail', campaign_id=campaign_id))
         except Exception as e:
             app.logger.error(f"Error sending test email via form: {str(e)}")
