@@ -788,6 +788,8 @@ def create_app(config_object='config.Config'):
                         handle_complaint_notification(message)
                     elif notification_type == 'Delivery':
                         handle_delivery_notification(message)
+                    elif notification_type == 'DeliveryDelay':
+                        handle_delivery_delay_notification(message)
                     else:
                         app.logger.warning(f"Unknown notification type: {notification_type}")
                     
@@ -795,6 +797,7 @@ def create_app(config_object='config.Config'):
                 except json.JSONDecodeError as e:
                     app.logger.error(f"Failed to parse Message JSON: {str(e)}")
                     app.logger.debug(f"Message data: {notification_json.get('Message')}")
+                    # Instead of failing, return success to prevent SNS from retrying
                     return jsonify({'success': True, 'message': f'Invalid Message JSON: {str(e)}'})
             
             return jsonify({'success': True, 'message': 'Notification received but no action taken'})
@@ -967,6 +970,59 @@ def create_app(config_object='config.Config'):
             except Exception as e:
                 db.session.rollback()
                 app.logger.error(f"Error updating delivery status: {str(e)}")
+    
+    def handle_delivery_delay_notification(message):
+        """Handle delivery delay notifications from SES"""
+        app.logger.info("==== HANDLING DELIVERY DELAY NOTIFICATION ====")
+        delay_info = message.get('deliveryDelay', {})
+        
+        # Get the message ID from the mail object
+        mail_obj = message.get('mail', {})
+        message_id = mail_obj.get('messageId')
+        app.logger.info(f"Message ID from notification: {message_id}")
+        
+        # Log all delayed recipients
+        delayed_recipients = delay_info.get('delayedRecipients', [])
+        app.logger.info(f"Delayed recipients: {delayed_recipients}")
+        
+        for recipient_info in delayed_recipients:
+            email = recipient_info.get('emailAddress')
+            if not email:
+                app.logger.warning("No email address found in delay recipient info")
+                continue
+                
+            app.logger.info(f"Processing delay notification for message ID: {message_id}")
+            app.logger.info(f"Updating delay status for {email} in campaign")
+            
+            # Find the recipient record
+            recipient_record = EmailRecipient.query.filter_by(message_id=message_id, email=email).first()
+            
+            if not recipient_record:
+                app.logger.warning(f"No recipient found with message ID {message_id} and email {email}")
+                # Try to find by email only as fallback
+                recipient_record = EmailRecipient.query.filter_by(email=email).order_by(EmailRecipient.id.desc()).first()
+                if recipient_record:
+                    app.logger.info(f"Found recipient by email only (fallback): {recipient_record.id}")
+                else:
+                    app.logger.error(f"Could not find any recipient with email {email}")
+                    continue
+            else:
+                app.logger.info(f"Found recipient with matching message ID and email: {recipient_record.id}")
+                
+            # Update the recipient status
+            original_status = recipient_record.delivery_status
+            recipient_record.delivery_status = 'delayed'
+            recipient_record.delay_time = datetime.now()
+            
+            app.logger.info(f"Updated delay status for {email} from '{original_status}' to 'delayed'")
+            
+            # Commit the changes
+            try:
+                db.session.commit()
+                app.logger.info(f"Updated delay status for {email}")
+            except Exception as e:
+                db.session.rollback()
+                app.logger.error(f"Error updating delay status: {str(e)}")
     
     @app.route('/reports/bounces')
     def bounce_report():
