@@ -308,6 +308,9 @@ class SESEmailService:
                 {'Name': 'List-Unsubscribe-Post', 'Value': 'List-Unsubscribe=One-Click'}
             ]
             
+            # Headers need to be added to the Message part, not at the root level
+            email_args['Message']['Headers'] = headers
+            
             # If no_return_path is enabled, disable the configuration set and return path
             # to prevent SES from sending notifications for large campaigns
             if no_return_path:
@@ -315,8 +318,6 @@ class SESEmailService:
                 use_config_set = False  # Skip configuration set completely
             else:
                 use_config_set = bool(self.configuration_set) and tracking_enabled  # Use it if it exists and tracking enabled
-            
-            email_args['Headers'] = headers
             
             # Initialize SES client
             self._ensure_client()
