@@ -362,7 +362,7 @@ class SESEmailService:
             return None
     
     def send_bulk_emails(self, recipients, subject, template_html, template_text=None, 
-                        sender=None, sender_name=None, rate_limit=3, tracking_enabled=True, campaign_id=None):
+                        sender=None, sender_name=None, rate_limit=2, tracking_enabled=True, campaign_id=None):
         """
         Send bulk emails with rate limiting
         
@@ -396,12 +396,22 @@ class SESEmailService:
             result['email'] = email
             results.append(result)
             
-            # Rate limiting with additional pauses every 30 emails to prevent overwhelming the server
+            # Rate limiting with additional pauses to prevent worker timeouts
             time.sleep(sleep_time)
             
-            # Add a pause every 30 emails to let the server catch up
-            if len(results) % 30 == 0:
-                self.logger.info(f"Added 2-second pause after sending {len(results)} emails to prevent server overload")
-                time.sleep(2.0)
+            # More aggressive pausing strategy to prevent Render worker timeouts
+            if len(results) % 20 == 0:
+                self.logger.info(f"Added 3-second pause after sending {len(results)} emails to prevent server overload")
+                time.sleep(3.0)
+                
+            # Extra long pause every 100 emails to completely reset worker timeout counter
+            if len(results) % 100 == 0 and len(results) > 0:
+                self.logger.info(f"Added 5-second extended pause after sending {len(results)} emails to reset worker timeout")
+                time.sleep(5.0)
+                
+            # Ultra-defensive pause every 500 emails - this is right around where your timeouts happen
+            if len(results) % 500 == 0 and len(results) > 0:
+                self.logger.info(f"Added 10-second safety pause after sending {len(results)} emails")
+                time.sleep(10.0)
             
         return results

@@ -3,7 +3,7 @@ services:
     name: emailbulk-web
     env: python
     buildCommand: "pip install -r requirements.txt"
-    startCommand: "gunicorn app:app --workers=3 --timeout=120 --max-requests=1000 --max-requests-jitter=50 --bind=0.0.0.0:$PORT"
+    startCommand: "gunicorn app:app -c gunicorn_config.py --bind=0.0.0.0:$PORT"
     healthCheckPath: /
     envVars:
       - key: FLASK_ENV
@@ -28,6 +28,14 @@ services:
         generateValue: true
       - key: SCHEDULER_ENABLED
         value: "true"
+      - key: SQS_ENABLED
+        value: "true"
+      - key: SNS_DIRECT_DISABLED
+        value: "true"
+      - key: SQS_QUEUE_URL
+        sync: false
+      - key: SQS_REGION
+        value: "us-east-2"
     buildFilter:
       paths:
         - requirements.txt
