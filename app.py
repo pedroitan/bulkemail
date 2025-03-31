@@ -1406,16 +1406,36 @@ def create_app(config_object='config.Config'):
             # Debug logging to help diagnose issues
             app.logger.info(f"Sending test email using sender: {campaign.sender_email}")
             
+            # Create a recipient record first so we have an ID for tracking
+            test_recipient = EmailRecipient(
+                campaign_id=campaign.id,
+                email=data['email'],
+                status='sending',
+                delivery_status='pending',
+                sent_at=datetime.now()
+            )
+            db.session.add(test_recipient)
+            db.session.commit()
+            
+            # Now send the email with tracking parameters
             message_id = email_service.send_email(
                 recipient=data['email'],
                 subject=f"[TEST] {campaign.subject}",
                 body_html=campaign.body_html,
                 body_text=campaign.body_text,
-                sender=campaign.sender_email,  # Use the campaign's sender email
-                sender_name=campaign.sender_name
+                campaign_id=campaign.id,
+                recipient_id=test_recipient.id  # Pass recipient ID for tracking
             )
             
+            # Update the recipient record if email was sent
             if message_id:
+                test_recipient.status = 'sent'
+                test_recipient.message_id = message_id
+                test_recipient.delivery_status = 'sent'
+                db.session.commit()
+                
+                app.logger.info(f"Test email sent to {data['email']} with message_id={message_id}")
+                app.logger.info(f"Added test recipient to campaign {campaign.id} for status tracking")
                 return jsonify({
                     'success': True,
                     'message': 'Test email sent successfully!'
@@ -1552,30 +1572,37 @@ def create_app(config_object='config.Config'):
             app.logger.info(f"Using sender email: {email_service.sender_email}")
             app.logger.info(f"Using configuration set: {email_service.configuration_set}")
             
+            # Create a recipient record first so we have an ID for tracking
+            test_recipient = EmailRecipient(
+                campaign_id=campaign.id,
+                email=test_email,
+                status='sending',
+                delivery_status='pending',
+                sent_at=datetime.now()
+            )
+            db.session.add(test_recipient)
+            db.session.commit()
+            
+            # Now send the email with tracking parameters
             message_id = email_service.send_email(
                 recipient=test_email,
                 subject=f"TEST: {campaign.subject}",
                 body_html=campaign.body_html,
-                body_text=campaign.body_text
+                body_text=campaign.body_text,
+                campaign_id=campaign.id,
+                recipient_id=test_recipient.id  # Pass recipient ID for tracking
             )
             
-            # Only add recipient record if email was actually sent
+            # Update the recipient record if email was sent
             if message_id:
-                # Add this test email to the campaign's recipient list to track delivery status
-                test_recipient = EmailRecipient(
-                    campaign_id=campaign.id,
-                    email=test_email,
-                    status='sent',
-                    message_id=message_id,
-                    delivery_status='sent',
-                    sent_at=datetime.now()
-                )
-                db.session.add(test_recipient)
+                test_recipient.status = 'sent'
+                test_recipient.message_id = message_id
+                test_recipient.delivery_status = 'sent'
                 db.session.commit()
                 
                 app.logger.info(f"Test email sent to {test_email} with message_id={message_id}")
                 app.logger.info(f"Added test recipient to campaign {campaign.id} for status tracking")
-                flash(f'Test email sent to {test_email} and added to recipient list for tracking', 'success')
+                flash(f'Test email sent to {test_email} with tracking enabled', 'success')
             else:
                 app.logger.error(f"Failed to send test email to {test_email} - no message ID returned")
                 flash(f'Failed to send test email. Check logs for details.', 'danger')
