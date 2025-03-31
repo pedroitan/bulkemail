@@ -14,6 +14,7 @@ from flask import current_app
 from string import Template
 import os
 from dotenv import load_dotenv, find_dotenv
+import uuid
 
 # SESEmailService class for sending emails through Amazon SES
 class SESEmailService:
@@ -233,32 +234,129 @@ class SESEmailService:
         return verifier.batch_verify(emails, max_workers)
     
     def send_template_email(self, recipient, subject, template_html, template_text=None, 
-                           template_data=None, sender=None, sender_name=None, tracking_enabled=True, campaign_id=None, recipient_id=None):
+                           template_data=None, sender=None, sender_name=None, 
+                           tracking_enabled=True, campaign_id=None, recipient_id=None,
+                           tags=None, no_return_path=False):
         """
-        Send email with template variables replaced
+        Send a templated email with optional personalization.
+        
+        Args:
+            recipient: Email address of the recipient
+            subject: Email subject
+            template_html: HTML template to use (can include {{ variable }} placeholders)
+            template_text: Plain text template (optional)
+            template_data: Dictionary of values to use for template variables
+            sender: Email address to use as sender (overrides the default)
+            sender_name: Name to display as the sender
+            tracking_enabled: Whether to enable tracking (legacy parameter)
+            campaign_id: Campaign ID for tracking (legacy parameter)
+            recipient_id: Recipient ID for tracking (legacy parameter)
+            tags: List of tags to apply to the email
+            no_return_path: If True, disable return path tracking to reduce SNS load (for large campaigns)
+            
+        Returns:
+            message_id: The SES message ID if successful, None if failed
         """
-        template_data = template_data or {}
-        
-        # Replace template variables
-        html_template = Template(template_html)
-        html_content = html_template.safe_substitute(template_data)
-        
-        text_content = None
-        if template_text:
-            text_template = Template(template_text)
-            text_content = text_template.safe_substitute(template_data)
-        
-        return self.send_email(
-            recipient=recipient,
-            subject=subject,
-            body_html=html_content,
-            body_text=text_content,
-            sender=sender,
-            sender_name=sender_name,
-            tracking_enabled=tracking_enabled,
-            campaign_id=campaign_id,
-            recipient_id=recipient_id
-        )
+        try:
+            template_data = template_data or {}
+            
+            # Use default sender email if not provided
+            if not sender:
+                sender = self.sender_email
+            
+            # Add sender name if provided
+            if sender_name:
+                sender = f"{sender_name} <{sender}>"
+            
+            # Render template with provided data
+            template = Template(template_html)
+            body_html = template.render(**template_data)
+            
+            body_text = None
+            if template_text:
+                text_template = Template(template_text)
+                body_text = text_template.render(**template_data)
+            
+            # Prepare email message
+            email_args = {
+                'Source': sender,
+                'Destination': {
+                    'ToAddresses': [recipient]
+                },
+                'Message': {
+                    'Subject': {
+                        'Data': subject
+                    },
+                    'Body': {
+                        'Html': {
+                            'Data': body_html
+                        }
+                    }
+                }
+            }
+            
+            # Add plain text body if provided
+            if body_text:
+                email_args['Message']['Body']['Text'] = {'Data': body_text}
+                
+            # Add headers to help avoid Gmail promotions tab
+            headers = [
+                {'Name': 'X-Priority', 'Value': '1'},
+                {'Name': 'Precedence', 'Value': 'high'},
+                {'Name': 'X-Auto-Response-Suppress', 'Value': 'OOF, AutoReply'},
+                {'Name': 'X-Entity-Ref-ID', 'Value': str(uuid.uuid4())},
+                {'Name': 'List-Unsubscribe-Post', 'Value': 'List-Unsubscribe=One-Click'}
+            ]
+            
+            # If no_return_path is enabled, disable the configuration set and return path
+            # to prevent SES from sending notifications for large campaigns
+            if no_return_path:
+                self.logger.info(f"Return path tracking disabled for large campaign email to {recipient}")
+                use_config_set = False  # Skip configuration set completely
+            else:
+                use_config_set = bool(self.configuration_set) and tracking_enabled  # Use it if it exists and tracking enabled
+            
+            email_args['Headers'] = headers
+            
+            # Initialize SES client
+            self._ensure_client()
+            
+            # Only try with configuration set if it exists AND we should use it
+            if use_config_set:
+                try:
+                    # Add configuration set to a copy of email_args for the first attempt
+                    first_attempt_args = email_args.copy()
+                    first_attempt_args['ConfigurationSetName'] = self.configuration_set
+                    self.logger.info(f"Using configuration set '{self.configuration_set}' for email to {recipient}")
+                    
+                    response = self.client.send_email(**first_attempt_args)
+                    message_id = response['MessageId']
+                    self.logger.info(f"Email sent to {recipient}, Message ID: {message_id}")
+                    return message_id
+                    
+                except ClientError as e:
+                    # If config set doesn't exist, try without it
+                    if "ConfigurationSetDoesNotExist" in str(e):
+                        self.logger.warning(f"Configuration set '{self.configuration_set}' does not exist in AWS SES. "
+                                          f"Sending email without configuration set.")
+                        # Set to None to avoid future errors
+                        self.configuration_set = None
+                    else:
+                        # Re-raise if error is not related to configuration set
+                        raise
+            
+            # Second attempt without configuration set
+            response = self.client.send_email(**email_args)
+            message_id = response['MessageId']
+            if no_return_path:
+                self.logger.info(f"Email sent to {recipient} with tracking disabled, Message ID: {message_id}")
+            else:
+                self.logger.info(f"Email sent to {recipient} without configuration set, Message ID: {message_id}")
+            return message_id
+            
+        except Exception as e:
+            self.logger.error(f"Error sending email to {recipient}: {str(e)}", exc_info=True)
+            return None
     
     def send_bulk_emails(self, recipients, subject, template_html, template_text=None, 
                         sender=None, sender_name=None, rate_limit=10, tracking_enabled=True, campaign_id=None):

@@ -133,6 +133,9 @@ def _execute_campaign(app, campaign_id):
                         **custom_data
                     }
                     
+                    # Turn off return path monitoring for large campaigns to reduce SNS load
+                    disable_tracking = total_recipients > 400  # Only disable for large campaigns
+                    
                     # Send email
                     message_id = email_service.send_template_email(
                         recipient=recipient.email,
@@ -141,7 +144,8 @@ def _execute_campaign(app, campaign_id):
                         template_text=campaign.body_text,
                         template_data=template_data,
                         sender_name=campaign.sender_name,
-                        sender=campaign.sender_email  # Add the sender email from the campaign
+                        sender=campaign.sender_email,  # Add the sender email from the campaign
+                        no_return_path=disable_tracking  # Add this parameter to disable SES notifications
                     )
                     
                     # Update recipient status
