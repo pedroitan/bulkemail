@@ -167,6 +167,11 @@ def create_app(config_object='config.Config'):
     with app.app_context():
         tracking_manager = init_tracking(app, db)
         app.tracking_manager = tracking_manager
+        
+        # Connect tracking manager to the email service
+        email_service = app.get_email_service()
+        email_service.tracking_manager = tracking_manager
+        app.logger.info("Connected tracking manager to email service")
     
     # Initialize email verifier
     app.email_verifier = EmailVerifier()
@@ -790,6 +795,10 @@ def create_app(config_object='config.Config'):
                         handle_delivery_notification(message)
                     elif notification_type == 'DeliveryDelay':
                         handle_delivery_delay_notification(message)
+                    elif notification_type == 'Open':
+                        handle_open_notification(message)
+                    elif notification_type == 'Click':
+                        handle_click_notification(message)
                     else:
                         app.logger.warning(f"Unknown notification type: {notification_type}")
                     
@@ -1023,6 +1032,102 @@ def create_app(config_object='config.Config'):
             except Exception as e:
                 db.session.rollback()
                 app.logger.error(f"Error updating delay status: {str(e)}")
+    
+    def handle_open_notification(message):
+        """Handle open notifications from SES"""
+        app.logger.info("==== HANDLING OPEN NOTIFICATION ====")
+        open_info = message.get('open', {})
+        
+        # Get the message ID from the mail object
+        mail_obj = message.get('mail', {})
+        message_id = mail_obj.get('messageId')
+        app.logger.info(f"Message ID from notification: {message_id}")
+        
+        # Log all opened recipients
+        opened_recipients = open_info.get('recipients', [])
+        app.logger.info(f"Opened recipients: {opened_recipients}")
+        
+        for email in opened_recipients:
+            app.logger.info(f"Processing open notification for {email} with message ID: {message_id}")
+            
+            # Find the recipient record
+            recipient_record = EmailRecipient.query.filter_by(message_id=message_id, email=email).first()
+            
+            if not recipient_record:
+                app.logger.warning(f"No recipient found with message ID {message_id} and email {email}")
+                # Try to find by email only as fallback
+                recipient_record = EmailRecipient.query.filter_by(email=email).order_by(EmailRecipient.id.desc()).first()
+                if recipient_record:
+                    app.logger.info(f"Found recipient by email only (fallback): {recipient_record.id}")
+                else:
+                    app.logger.error(f"Could not find any recipient with email {email}")
+                    continue
+            else:
+                app.logger.info(f"Found recipient with matching message ID and email: {recipient_record.id}")
+                
+            # Update the recipient status
+            original_status = recipient_record.delivery_status
+            recipient_record.delivery_status = 'opened'
+            recipient_record.open_time = datetime.now()
+            recipient_record.open_count = recipient_record.open_count + 1 if recipient_record.open_count else 1
+            
+            app.logger.info(f"Updated open status for {email} from '{original_status}' to 'opened'")
+            
+            # Commit the changes
+            try:
+                db.session.commit()
+                app.logger.info(f"Updated open status for {email}")
+            except Exception as e:
+                db.session.rollback()
+                app.logger.error(f"Error updating open status: {str(e)}")
+    
+    def handle_click_notification(message):
+        """Handle click notifications from SES"""
+        app.logger.info("==== HANDLING CLICK NOTIFICATION ====")
+        click_info = message.get('click', {})
+        
+        # Get the message ID from the mail object
+        mail_obj = message.get('mail', {})
+        message_id = mail_obj.get('messageId')
+        app.logger.info(f"Message ID from notification: {message_id}")
+        
+        # Log all clicked recipients
+        clicked_recipients = click_info.get('recipients', [])
+        app.logger.info(f"Clicked recipients: {clicked_recipients}")
+        
+        for email in clicked_recipients:
+            app.logger.info(f"Processing click notification for {email} with message ID: {message_id}")
+            
+            # Find the recipient record
+            recipient_record = EmailRecipient.query.filter_by(message_id=message_id, email=email).first()
+            
+            if not recipient_record:
+                app.logger.warning(f"No recipient found with message ID {message_id} and email {email}")
+                # Try to find by email only as fallback
+                recipient_record = EmailRecipient.query.filter_by(email=email).order_by(EmailRecipient.id.desc()).first()
+                if recipient_record:
+                    app.logger.info(f"Found recipient by email only (fallback): {recipient_record.id}")
+                else:
+                    app.logger.error(f"Could not find any recipient with email {email}")
+                    continue
+            else:
+                app.logger.info(f"Found recipient with matching message ID and email: {recipient_record.id}")
+                
+            # Update the recipient status
+            original_status = recipient_record.delivery_status
+            recipient_record.delivery_status = 'clicked'
+            recipient_record.click_time = datetime.now()
+            recipient_record.click_count = recipient_record.click_count + 1 if recipient_record.click_count else 1
+            
+            app.logger.info(f"Updated click status for {email} from '{original_status}' to 'clicked'")
+            
+            # Commit the changes
+            try:
+                db.session.commit()
+                app.logger.info(f"Updated click status for {email}")
+            except Exception as e:
+                db.session.rollback()
+                app.logger.error(f"Error updating click status: {str(e)}")
     
     @app.route('/reports/bounces')
     def bounce_report():
