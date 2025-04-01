@@ -31,6 +31,7 @@ from dotenv import load_dotenv
 from email_tracking import init_tracking
 from email_verification import EmailVerifier
 from sqs_handler import SQSHandler
+from recipient_lists import recipient_lists_bp
 
 # Load environment variables from .env file immediately
 load_dotenv()
@@ -255,6 +256,9 @@ def create_app(config_object='config.Config'):
     
     # Initialize email verifier
     app.email_verifier = EmailVerifier()
+    
+    # Register the recipient_lists blueprint
+    app.register_blueprint(recipient_lists_bp)
 
     # Routes
     @app.route('/')
@@ -507,6 +511,42 @@ def create_app(config_object='config.Config'):
         campaign = EmailCampaign.query.get_or_404(campaign_id)
         form = UploadRecipientsForm()
         
+        # Get all recipient lists for selection
+        recipient_lists = RecipientList.query.order_by(RecipientList.name).all()
+        
+        # Handle list selection
+        list_id = request.args.get('list_id') or request.form.get('list_id')
+        if list_id:
+            # Selected from an existing recipient list
+            recipient_list = RecipientList.query.get_or_404(list_id)
+            
+            # Get recipients from the list, excluding problematic ones
+            recipients = EmailRecipient.query.join(
+                recipient_list_items,
+                (recipient_list_items.c.recipient_id == EmailRecipient.id) & 
+                (recipient_list_items.c.list_id == list_id)
+            ).filter(EmailRecipient.global_status == 'active').all()
+            
+            # Add recipients to the campaign
+            added_count = 0
+            for recipient in recipients:
+                # Create a new campaign-specific recipient record
+                campaign_recipient = EmailRecipient(
+                    campaign_id=campaign.id,
+                    email=recipient.email,
+                    name=recipient.name,
+                    status='pending',
+                    global_status=recipient.global_status,
+                    custom_data=recipient.custom_data
+                )
+                db.session.add(campaign_recipient)
+                added_count += 1
+                
+            db.session.commit()
+            flash(f'Successfully added {added_count} recipients from list "{recipient_list.name}"!', 'success')
+            return redirect(url_for('campaign_detail', campaign_id=campaign_id))
+        
+        # Handle file upload
         if form.validate_on_submit():
             file = form.file.data
             if file and allowed_file(file.filename):
@@ -519,26 +559,65 @@ def create_app(config_object='config.Config'):
                 # Preview data
                 preview = preview_file_data(file_path)
                 
-                return render_template(
-                    'confirm_recipients.html',
-                    campaign=campaign,
-                    preview=preview,
-                    file_path=file_path
-                )
+                # If user wants to save this as a recipient list
+                if form.save_as_list.data:
+                    list_name = form.list_name.data or f"List from {campaign.name}"
+                    save_for_future = form.save_as_list.data
+                    
+                    return render_template(
+                        'confirm_recipients.html',
+                        campaign=campaign,
+                        preview=preview,
+                        file_path=file_path,
+                        save_as_list=save_for_future,
+                        list_name=list_name
+                    )
+                else:
+                    return render_template(
+                        'confirm_recipients.html',
+                        campaign=campaign,
+                        preview=preview,
+                        file_path=file_path
+                    )
             else:
                 flash('Invalid file format. Please upload a CSV or Excel file.', 'danger')
         
-        return render_template('upload_recipients.html', form=form, campaign=campaign)
+        return render_template('upload_recipients.html', form=form, campaign=campaign, recipient_lists=recipient_lists)
     
     @app.route('/campaigns/<int:campaign_id>/confirm-recipients', methods=['POST'])
     def confirm_recipients(campaign_id):
         campaign = EmailCampaign.query.get_or_404(campaign_id)
         file_path = request.form.get('file_path')
+        save_as_list = request.form.get('save_as_list') == 'True'
+        list_name = request.form.get('list_name')
         
         try:
-            # Load recipients from file
+            # Load recipients from file, filtering out problematic recipients
             count = app.get_scheduler().load_recipients_from_file(campaign_id, file_path)
-            flash(f'Successfully loaded {count} recipients!', 'success')
+            
+            # Save as a recipient list if requested
+            if save_as_list and list_name:
+                new_list = RecipientList(name=list_name, description=f"Created from campaign '{campaign.name}'")
+                db.session.add(new_list)
+                db.session.flush()  # Get the new list ID
+                
+                # Associate recipients with the list
+                recipients = EmailRecipient.query.filter_by(campaign_id=campaign_id).all()
+                for recipient in recipients:
+                    stmt = recipient_list_items.insert().values(
+                        list_id=new_list.id,
+                        recipient_id=recipient.id
+                    )
+                    db.session.execute(stmt)
+                
+                # Update list stats
+                new_list.update_stats()
+                db.session.commit()
+                
+                flash(f'Successfully loaded {count} recipients and saved as list "{list_name}"!', 'success')
+            else:
+                flash(f'Successfully loaded {count} recipients!', 'success')
+                
             return redirect(url_for('campaign_detail', campaign_id=campaign_id))
         except Exception as e:
             flash(f'Error loading recipients: {str(e)}', 'danger')
@@ -1028,7 +1107,13 @@ def create_app(config_object='config.Config'):
             recipient_record.bounce_type = bounce_type
             recipient_record.bounce_subtype = bounce_subtype
             recipient_record.bounce_time = datetime.now()
-            recipient_record.error_message = recipient_info.get('diagnosticCode')
+            recipient_record.bounce_diagnostic = recipient_info.get('diagnosticCode')
+            
+            # Update global status for permanent bounces
+            # This will mark the recipient as problematic for all future campaigns
+            if bounce_type == 'Permanent':
+                recipient_record.global_status = 'bounced'
+                app.logger.info(f"Set global status to 'bounced' for {email} - this email won't be sent to in future campaigns")
             
             app.logger.info(f"Updated bounce status for {email} from '{original_status}' to 'bounced'")
             
@@ -1043,7 +1128,53 @@ def create_app(config_object='config.Config'):
     def handle_complaint_notification(message):
         """Handle complaint notifications from SES"""
         app.logger.info("==== HANDLING COMPLAINT NOTIFICATION ====")
+        
+        # Extract complaint information
         complaint_info = message.get('complaint', {})
+        mail_obj = message.get('mail', {})
+        message_id = mail_obj.get('messageId')
+        
+        # Get the list of recipients that complained
+        complaint_recipients = complaint_info.get('complainedRecipients', [])
+        
+        app.logger.info(f"Message ID from complaint notification: {message_id}")
+        app.logger.info(f"Complaint recipients: {complaint_recipients}")
+        
+        # Process each complaint recipient
+        for recipient_info in complaint_recipients:
+            email = recipient_info.get('emailAddress')
+            if not email:
+                app.logger.warning("No email address found in complaint recipient info")
+                continue
+                
+            # Find the recipient record
+            recipient_record = EmailRecipient.query.filter_by(message_id=message_id, email=email).first()
+            
+            if not recipient_record:
+                app.logger.warning(f"No recipient found with message ID {message_id} and email {email}")
+                # Try to find by email only as fallback
+                recipient_record = EmailRecipient.query.filter_by(email=email).order_by(EmailRecipient.id.desc()).first()
+                if not recipient_record:
+                    app.logger.error(f"Could not find any recipient with email {email}")
+                    continue
+            
+            # Update the recipient status
+            recipient_record.status = 'complained'
+            
+            # Set global status to 'complained' - this will prevent future sends to this email
+            recipient_record.global_status = 'complained'
+            
+            app.logger.info(f"Updated {email} status to 'complained' and set global status to prevent future sends")
+            
+            # Commit the changes
+            try:
+                db.session.commit()
+                app.logger.info(f"Successfully updated complaint status for {email}")
+            except Exception as e:
+                db.session.rollback()
+                app.logger.error(f"Error updating complaint status: {str(e)}")
+        
+        # Get complaint type for logging
         complaint_type = complaint_info.get('complaintFeedbackType')
         
         app.logger.info(f"Complaint type: {complaint_type}")
@@ -1841,6 +1972,53 @@ def create_app(config_object='config.Config'):
                 'error': str(e)
             })
 
+    @app.route('/api/campaigns/<int:campaign_id>/progress', methods=['GET'])
+    def get_campaign_progress(campaign_id):
+        """API endpoint to get real-time campaign progress"""
+        try:
+            campaign = EmailCampaign.query.get_or_404(campaign_id)
+            
+            # Get counts of different statuses
+            total_recipients = EmailRecipient.query.filter_by(campaign_id=campaign_id).count()
+            sent_count = EmailRecipient.query.filter_by(campaign_id=campaign_id, status='sent').count()
+            failed_count = EmailRecipient.query.filter_by(campaign_id=campaign_id, status='failed').count()
+            pending_count = total_recipients - sent_count - failed_count
+            
+            # Calculate progress percentage
+            progress_percentage = 0
+            if total_recipients > 0:
+                progress_percentage = int(((sent_count + failed_count) / total_recipients) * 100)
+            
+            # Calculate estimated time remaining based on current rate
+            # For running campaigns only
+            estimated_time_remaining = None
+            if campaign.status == 'running' and campaign.started_at and sent_count > 0:
+                elapsed_time = (datetime.now() - campaign.started_at).total_seconds()
+                if elapsed_time > 0:
+                    emails_per_second = sent_count / elapsed_time
+                    if emails_per_second > 0:
+                        remaining_emails = total_recipients - sent_count - failed_count
+                        est_seconds_remaining = remaining_emails / emails_per_second
+                        estimated_time_remaining = int(est_seconds_remaining)
+            
+            return jsonify({
+                'success': True,
+                'campaign': {
+                    'id': campaign.id,
+                    'name': campaign.name,
+                    'status': campaign.status,
+                    'total_recipients': total_recipients,
+                    'sent_count': sent_count,
+                    'failed_count': failed_count,
+                    'pending_count': pending_count,
+                    'progress_percentage': progress_percentage,
+                    'estimated_time_remaining': estimated_time_remaining
+                }
+            })
+        except Exception as e:
+            app.logger.error(f"Error getting campaign progress: {str(e)}")
+            return jsonify({'success': False, 'error': str(e)}), 500
+    
     @app.route('/api/campaigns/<int:campaign_id>/recipients', methods=['GET'])
     def get_campaign_recipients(campaign_id):
         """API endpoint to fetch recipients for a campaign"""

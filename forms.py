@@ -1,6 +1,6 @@
 from flask_wtf import FlaskForm
 from flask_wtf.file import FileField, FileRequired, FileAllowed
-from wtforms import StringField, TextAreaField, DateTimeField, SubmitField, SelectField
+from wtforms import StringField, TextAreaField, DateTimeField, SubmitField, SelectField, BooleanField
 from wtforms.validators import DataRequired, Email, Length, Optional
 from datetime import datetime
 import os
@@ -35,4 +35,24 @@ class UploadRecipientsForm(FlaskForm):
                         FileRequired(),
                         FileAllowed(['csv', 'xlsx', 'xls'], 'CSV or Excel files only!')
                     ])
+    save_as_list = BooleanField('Save as reusable recipient list')
+    list_name = StringField('List Name', validators=[Optional(), Length(max=100)])
+    list_description = TextAreaField('Description', validators=[Optional()])
     submit = SubmitField('Upload')
+
+
+class RecipientListForm(FlaskForm):
+    name = StringField('List Name', validators=[DataRequired(), Length(max=100)])
+    description = TextAreaField('Description', validators=[Optional()])
+    submit = SubmitField('Save List')
+
+
+class ExportRecipientsForm(FlaskForm):
+    include_bounced = BooleanField('Include bounced emails')
+    include_complained = BooleanField('Include emails that complained')
+    include_suppressed = BooleanField('Include suppressed emails')
+    export_format = SelectField('Export Format', choices=[
+        ('csv', 'CSV File'),
+        ('xlsx', 'Excel File')
+    ])
+    submit = SubmitField('Export')

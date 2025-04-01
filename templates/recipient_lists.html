@@ -1,0 +1,87 @@
+{% extends 'base.html' %}
+
+{% block title %}Recipient Lists - Bulk Email Scheduler{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="bi bi-people me-2"></i>Recipient Lists</h2>
+        <a href="{{ url_for('create_recipient_list') }}" class="btn btn-primary">
+            <i class="bi bi-plus-circle me-2"></i>New Recipient List
+        </a>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Total Recipients</th>
+                            <th>Active</th>
+                            <th>Bounced</th>
+                            <th>Created</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for recipient_list in recipient_lists %}
+                        <tr>
+                            <td>{{ recipient_list.name }}</td>
+                            <td>{{ recipient_list.total_recipients }}</td>
+                            <td>{{ recipient_list.active_recipients }}</td>
+                            <td>{{ recipient_list.bounced_recipients }}</td>
+                            <td>{{ recipient_list.created_at.strftime('%Y-%m-%d') }}</td>
+                            <td>
+                                <div class="btn-group" role="group">
+                                    <a href="{{ url_for('view_recipient_list', list_id=recipient_list.id) }}" class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-eye"></i>
+                                    </a>
+                                    <a href="{{ url_for('edit_recipient_list', list_id=recipient_list.id) }}" class="btn btn-sm btn-outline-secondary">
+                                        <i class="bi bi-pencil"></i>
+                                    </a>
+                                    <a href="{{ url_for('export_recipient_list', list_id=recipient_list.id) }}" class="btn btn-sm btn-outline-success">
+                                        <i class="bi bi-download"></i>
+                                    </a>
+                                    <button type="button" class="btn btn-sm btn-outline-danger" 
+                                            data-bs-toggle="modal" 
+                                            data-bs-target="#deleteListModal{{ recipient_list.id }}">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
+                                
+                                <!-- Delete Modal -->
+                                <div class="modal fade" id="deleteListModal{{ recipient_list.id }}" tabindex="-1" aria-hidden="true">
+                                    <div class="modal-dialog">
+                                        <div class="modal-content">
+                                            <div class="modal-header">
+                                                <h5 class="modal-title">Delete Recipient List</h5>
+                                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                            </div>
+                                            <div class="modal-body">
+                                                Are you sure you want to delete the recipient list "{{ recipient_list.name }}"? This action cannot be undone and will remove the list association, but will not delete the recipients themselves.
+                                            </div>
+                                            <div class="modal-footer">
+                                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                                <form action="{{ url_for('delete_recipient_list', list_id=recipient_list.id) }}" method="post">
+                                                    <button type="submit" class="btn btn-danger">Delete</button>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="6" class="text-center">No recipient lists yet. <a href="{{ url_for('create_recipient_list') }}">Create one now</a>.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

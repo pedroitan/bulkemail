@@ -1,0 +1,71 @@
+{% extends 'base.html' %}
+
+{% block title %}Export Recipients - Bulk Email Scheduler{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>
+            <i class="bi bi-download me-2"></i>
+            Export Recipients{% if recipient_list %} from {{ recipient_list.name }}{% endif %}
+        </h2>
+        <div>
+            {% if recipient_list %}
+            <a href="{{ url_for('view_recipient_list', list_id=recipient_list.id) }}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left me-2"></i>Back to List
+            </a>
+            {% else %}
+            <a href="{{ url_for('recipient_lists') }}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left me-2"></i>Back to Lists
+            </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <form method="post">
+                {{ form.hidden_tag() }}
+                
+                <div class="mb-3">
+                    <div class="form-text mb-3">
+                        Select which types of recipients to include in the export. By default, only active recipients are included.
+                    </div>
+                    
+                    <div class="form-check">
+                        {{ form.include_bounced(class="form-check-input") }}
+                        {{ form.include_bounced.label(class="form-check-label") }}
+                        <div class="form-text">Recipients with permanent bounces will be included if checked</div>
+                    </div>
+                    
+                    <div class="form-check">
+                        {{ form.include_complained(class="form-check-input") }}
+                        {{ form.include_complained.label(class="form-check-label") }}
+                        <div class="form-text">Recipients who complained will be included if checked</div>
+                    </div>
+                    
+                    <div class="form-check">
+                        {{ form.include_suppressed(class="form-check-input") }}
+                        {{ form.include_suppressed.label(class="form-check-label") }}
+                        <div class="form-text">Suppressed emails will be included if checked</div>
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    {{ form.export_format.label(class="form-label") }}
+                    {{ form.export_format(class="form-select") }}
+                </div>
+                
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle me-2"></i>
+                    <strong>Tip:</strong> The exported file will include all recipient data, including custom fields, bounce information, and tracking statistics.
+                </div>
+                
+                <div class="mt-4">
+                    {{ form.submit(class="btn btn-primary") }}
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
