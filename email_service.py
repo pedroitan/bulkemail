@@ -107,7 +107,7 @@ class SESEmailService:
             )
             self.logger.info("SES client created successfully")
     
-    def send_email(self, recipient, subject, body_html, body_text=None, sender=None, sender_name=None, tracking_enabled=True, campaign_id=None, recipient_id=None):
+    def send_email(self, recipient, subject, body_html, body_text=None, sender=None, sender_name=None, tracking_enabled=True, campaign_id=None, recipient_id=None, no_return_path=False):
         """
         Send an email using Amazon SES
         
@@ -121,6 +121,7 @@ class SESEmailService:
             tracking_enabled: Whether to enable open/click tracking (default: True)
             campaign_id: ID of the campaign this email belongs to (for tracking)
             recipient_id: ID of the recipient record (for tracking)
+            no_return_path: If True, disable return path tracking to reduce SNS load (default: False)
         
         Returns:
             Message ID if successful, None otherwise
