@@ -1911,12 +1911,38 @@ def create_app(config_object='config.Config'):
                 try:
                     # Parse and handle SNS notification
                     receipt_handle = message['ReceiptHandle']
-                    body = json.loads(message['Body'])
+                    
+                    # Safely parse message body
+                    raw_body = message.get('Body', '')
+                    if not raw_body or not raw_body.strip():
+                        app.logger.warning("Empty message body, skipping")
+                        sqs_handler.delete_message(receipt_handle)
+                        continue
+                        
+                    try:
+                        body = json.loads(raw_body)
+                    except json.JSONDecodeError as json_err:
+                        app.logger.warning(f"Invalid JSON in message body: {str(json_err)}")
+                        # Delete invalid messages to prevent queue build-up
+                        sqs_handler.delete_message(receipt_handle)
+                        continue
                     
                     # If this is an SNS message, extract the actual message
                     if 'Message' in body:
                         # For processing, use the existing notification handler logic
-                        sns_message = json.loads(body['Message'])
+                        raw_message = body.get('Message', '')
+                        if not raw_message or not isinstance(raw_message, str):
+                            app.logger.warning("Invalid SNS message format, skipping")
+                            sqs_handler.delete_message(receipt_handle)
+                            continue
+                            
+                        try:
+                            sns_message = json.loads(raw_message)
+                        except json.JSONDecodeError as json_err:
+                            app.logger.warning(f"Invalid JSON in SNS message: {str(json_err)}")
+                            sqs_handler.delete_message(receipt_handle)
+                            continue
+                            
                         notification_type = sns_message.get('notificationType') or sns_message.get('eventType')
                         
                         app.logger.info(f"Processing SQS message with notification type: {notification_type}")
@@ -1941,6 +1967,13 @@ def create_app(config_object='config.Config'):
                     
                 except Exception as e:
                     app.logger.error(f"Error processing SQS message: {str(e)}", exc_info=True)
+                    # Delete the message to prevent queue build-up with problematic messages
+                    try:
+                        if 'receipt_handle' in locals():
+                            sqs_handler.delete_message(receipt_handle)
+                            app.logger.info("Message deleted from SQS queue")
+                    except Exception as delete_err:
+                        app.logger.error(f"Error deleting message: {str(delete_err)}")
                     # Continue with other messages
             
             return jsonify({"status": "success", "processed": processed_count})
