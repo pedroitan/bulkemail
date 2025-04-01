@@ -52,10 +52,37 @@ def process_sqs_queue_job():
                     try:
                         # Extract and process the SNS message
                         receipt_handle = message['ReceiptHandle']
-                        body = json.loads(message['Body'])
+                        
+                        # Safely parse the message body
+                        raw_body = message.get('Body', '{}')
+                        if not raw_body or not raw_body.strip():
+                            app.logger.warning("Received empty message body, skipping")
+                            sqs_handler.delete_message(receipt_handle)
+                            continue
+                            
+                        try:
+                            body = json.loads(raw_body)
+                        except json.JSONDecodeError as json_err:
+                            app.logger.warning(f"Invalid JSON in message body: {str(json_err)}")
+                            app.logger.debug(f"Raw message body: {raw_body[:100]}...")
+                            sqs_handler.delete_message(receipt_handle)
+                            continue
                         
                         if 'Message' in body:
-                            sns_message = json.loads(body['Message'])
+                            # Safely parse the SNS message
+                            raw_message = body.get('Message', '{}')
+                            if not raw_message or not isinstance(raw_message, str):
+                                app.logger.warning("Invalid or empty SNS message, skipping")
+                                sqs_handler.delete_message(receipt_handle)
+                                continue
+                                
+                            try:
+                                sns_message = json.loads(raw_message)
+                            except json.JSONDecodeError as json_err:
+                                app.logger.warning(f"Invalid JSON in SNS message: {str(json_err)}")
+                                app.logger.debug(f"Raw SNS message: {raw_message[:100]}...")
+                                sqs_handler.delete_message(receipt_handle)
+                                continue
                             notification_type = sns_message.get('notificationType') or sns_message.get('eventType')
                             
                             # Process the notification based on type
