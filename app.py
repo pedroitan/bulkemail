@@ -855,9 +855,22 @@ def create_app(config_object='config.Config'):
     
     @app.route('/api/sns/ses-notification', methods=['POST'])
     def sns_notification_handler():
+        # Add detailed debugging for SES-SNS-SQS notification flow
+        app.logger.debug("==== RECEIVED SNS NOTIFICATION ====")
+        app.logger.debug(f"Headers: {request.headers}")
+        
+        # Debug the raw data with safety measures for large payloads
+        raw_data = request.data.decode('utf-8')
+        app.logger.debug(f"Raw data length: {len(raw_data)} bytes")
+        if len(raw_data) > 2000:
+            app.logger.debug(f"Raw data (truncated): {raw_data[:1000]}...{raw_data[-1000:]}")
+        else:
+            app.logger.debug(f"Raw data: {raw_data}")
+            
         # If SNS_DIRECT_DISABLED is true, immediately return success
         # This prevents direct SNS notifications from affecting the app while still allowing SQS processing
         if app.config.get('SNS_DIRECT_DISABLED', False):
+            app.logger.debug("Direct SNS notifications are disabled, returning early")
             return jsonify({
                 'success': True, 
                 'message': 'Direct SNS notifications are disabled, notifications are processed via SQS'
@@ -1043,6 +1056,8 @@ def create_app(config_object='config.Config'):
                         handle_delivery_notification(message)
                     elif notification_type == 'DeliveryDelay':
                         handle_delivery_delay_notification(message)
+                    elif notification_type == 'Send':
+                        handle_send_notification(message)
                     elif notification_type == 'Open':
                         handle_open_notification(message)
                     elif notification_type == 'Click':
@@ -1290,9 +1305,102 @@ def create_app(config_object='config.Config'):
         message_id = mail_obj.get('messageId')
         app.logger.info(f"Message ID from notification: {message_id}")
         
+        # Get delay-specific information
+        delay_type = delay_info.get('delayType', 'Unknown')
+        timestamp = delay_info.get('timestamp')
+        
         # Log all delayed recipients
         delayed_recipients = delay_info.get('delayedRecipients', [])
         app.logger.info(f"Delayed recipients: {delayed_recipients}")
+        app.logger.info(f"Delivery delay type: {delay_type}")
+        app.logger.info(f"Delivery delay timestamp: {timestamp}")
+        
+        # Process each recipient
+        for recipient_info in delayed_recipients:
+            email = recipient_info.get('emailAddress')
+            if not email:
+                app.logger.warning("No email address found in delayed recipient info")
+                continue
+            
+            app.logger.info(f"Processing delivery delay notification for {email} with message ID: {message_id}")
+            
+            # Find the recipient record
+            recipient_record = EmailRecipient.query.filter_by(message_id=message_id, email=email).first()
+            
+            if not recipient_record:
+                app.logger.warning(f"No recipient found with message ID {message_id} and email {email}")
+                # Try to find by email only as fallback
+                recipient_record = EmailRecipient.query.filter_by(email=email).order_by(EmailRecipient.id.desc()).first()
+                if recipient_record:
+                    app.logger.info(f"Found recipient by email only (fallback): {recipient_record.id}")
+                else:
+                    app.logger.error(f"Could not find any recipient with email {email}")
+                    continue
+            else:
+                app.logger.info(f"Found recipient with matching message ID and email: {recipient_record.id}")
+                
+            # Update the recipient status
+            original_status = recipient_record.delivery_status
+            recipient_record.delivery_status = 'delayed'
+            recipient_record.delay_type = delay_type
+            recipient_record.delay_time = datetime.now()
+            
+            app.logger.info(f"Updated delivery status for {email} from '{original_status}' to 'delayed'")
+            
+            # Commit the changes
+            try:
+                db.session.commit()
+                app.logger.info(f"Updated delay status for {email}")
+            except Exception as e:
+                db.session.rollback()
+                app.logger.error(f"Error updating delay status: {str(e)}")
+    
+    def handle_send_notification(message):
+        """Handle send notifications from SES"""
+        app.logger.info("==== HANDLING SEND NOTIFICATION ====")
+        
+        # Get the message ID from the mail object
+        mail_obj = message.get('mail', {})
+        message_id = mail_obj.get('messageId')
+        app.logger.info(f"Message ID from send notification: {message_id}")
+        
+        # Get recipients
+        recipients = mail_obj.get('destination', [])
+        app.logger.info(f"Send notification recipients: {recipients}")
+        
+        for email in recipients:
+            app.logger.info(f"Processing send notification for {email} with message ID: {message_id}")
+            
+            # Find the recipient record
+            recipient_record = EmailRecipient.query.filter_by(message_id=message_id, email=email).first()
+            
+            if not recipient_record:
+                app.logger.warning(f"No recipient found with message ID {message_id} and email {email}")
+                # Try to find by email only as fallback
+                recipient_record = EmailRecipient.query.filter_by(email=email).order_by(EmailRecipient.id.desc()).first()
+                if recipient_record:
+                    app.logger.info(f"Found recipient by email only (fallback): {recipient_record.id}")
+                else:
+                    app.logger.error(f"Could not find any recipient with email {email}")
+                    continue
+            else:
+                app.logger.info(f"Found recipient with matching message ID and email: {recipient_record.id}")
+                
+            # Update the recipient status if it doesn't already have a status
+            if recipient_record.delivery_status in [None, '', 'queued', 'scheduled']:
+                original_status = recipient_record.delivery_status
+                recipient_record.delivery_status = 'sent'
+                recipient_record.sent_time = datetime.now()
+                
+                app.logger.info(f"Updated status for {email} from '{original_status}' to 'sent'")
+                
+                # Commit the changes
+                try:
+                    db.session.commit()
+                    app.logger.info(f"Updated send status for {email}")
+                except Exception as e:
+                    db.session.rollback()
+                    app.logger.error(f"Error updating send status: {str(e)}")
         
         for recipient_info in delayed_recipients:
             email = recipient_info.get('emailAddress')
