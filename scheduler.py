@@ -12,6 +12,9 @@ import json
 import pandas as pd
 import logging
 import time
+import gc
+import traceback
+import sys
 from datetime import datetime, timedelta
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, current_app
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -67,9 +70,34 @@ def _run_campaign_job(campaign_id):
         # Already in app context
         return _execute_campaign(app, campaign_id)
 
+# Import the AWS free tier safety system
+try:
+    from free_tier_safety import pause_campaign_if_limit_exceeded, free_tier_safety_check, FreeTierLimitExceeded, FreeTierWarning
+    free_tier_enabled = True
+except ImportError:
+    free_tier_enabled = False
+    
+def log_memory_usage(prefix=""):
+    """Log current memory usage for debugging"""
+    try:
+        import psutil
+        process = psutil.Process()
+        memory_info = process.memory_info()
+        memory_mb = memory_info.rss / (1024 * 1024)
+        logging.info(f"{prefix} Memory usage: {memory_mb:.2f}MB")
+        return memory_mb
+    except ImportError:
+        logging.warning("psutil not installed, cannot monitor memory usage")
+        return 0
+    except Exception as e:
+        logging.error(f"Error monitoring memory: {str(e)}")
+        return 0
+
 def _execute_campaign(app, campaign_id):
     """
     Internal function to execute the campaign within an app context.
+    
+    This function now includes AWS Free Tier safety checks to prevent exceeding limits.
     
     This is the core implementation for campaign email sending that handles:
     
@@ -95,12 +123,23 @@ def _execute_campaign(app, campaign_id):
     Returns:
         dict: Status report of the sending process
     """
+    # Add initial memory usage logging
+    initial_memory = log_memory_usage("CAMPAIGN START:")
+    
+    # Critical safety settings for large campaigns
+    EMERGENCY_ABORT_MEMORY_MB = 450  # Emergency abort if memory exceeds 450MB
+    EMERGENCY_PAUSE_THRESHOLD = 1250  # Pause after this many emails sent
+    EMERGENCY_PAUSE_DURATION = 60     # Pause for 60 seconds after threshold
     try:
         # Get campaign details
         campaign = EmailCampaign.query.get(campaign_id)
         if not campaign:
             logging.error(f"Campaign {campaign_id} not found")
             return
+            
+        # Track total sent emails for debugging the 1266 crash
+        total_sent_so_far = EmailRecipient.query.filter_by(campaign_id=campaign_id, status='sent').count()
+        logging.info(f"Campaign {campaign_id} already has {total_sent_so_far} emails sent before processing")
         
         # Set campaign start time
         if not campaign.started_at:
@@ -109,6 +148,23 @@ def _execute_campaign(app, campaign_id):
         
         # Log basic campaign info
         logging.info(f"Processing campaign {campaign_id}: {campaign.name} (status: {campaign.status})")
+        
+        # Check AWS Free Tier limits before processing
+        if free_tier_enabled:
+            try:
+                # Get recipient count
+                recipient_count = campaign.recipients.count()
+                
+                # Check if campaign would exceed AWS Free Tier limits
+                is_safe = pause_campaign_if_limit_exceeded(campaign)
+                
+                if not is_safe:
+                    logging.warning(f"Campaign {campaign_id} paused due to AWS Free Tier limits")
+                    return {'status': 'paused', 'reason': 'aws_free_tier_limit'}
+                    
+            except Exception as e:
+                logging.error(f"Error checking AWS Free Tier limits: {str(e)}")
+                # Continue with campaign even if free tier check fails
         
         # Update campaign status
         campaign.status = 'in_progress'
@@ -143,6 +199,11 @@ def _execute_campaign(app, campaign_id):
             
         processed_count = 0
         batch_count = 0
+        emails_sent_this_run = 0
+        crash_risk_detected = False
+        
+        # Track start time for performance monitoring
+        start_time = time.time()
         
         while processed_count < total_recipients:
             # Determine current batch end
@@ -171,6 +232,31 @@ def _execute_campaign(app, campaign_id):
                 
             for recipient in current_batch:
                 try:
+                    # CRITICAL: Check memory usage to prevent crashes
+                    current_memory = log_memory_usage(f"Before sending email {processed_count+1}:")
+                    if current_memory > EMERGENCY_ABORT_MEMORY_MB:
+                        logging.critical(f"EMERGENCY ABORT: Memory usage ({current_memory:.2f}MB) exceeds safety threshold")
+                        campaign.status = 'paused'
+                        db.session.commit()
+                        return {
+                            'status': 'paused',
+                            'reason': 'memory_limit_exceeded',
+                            'memory_usage': current_memory,
+                            'emails_sent': emails_sent_this_run
+                        }
+                    
+                    # Emergency circuit breaker for the 1266 email issue
+                    total_current_sent = total_sent_so_far + emails_sent_this_run
+                    if total_current_sent > EMERGENCY_PAUSE_THRESHOLD - 50 and total_current_sent < EMERGENCY_PAUSE_THRESHOLD + 50:
+                        logging.warning(f"APPROACHING CRASH ZONE: {total_current_sent} emails sent (threshold: {EMERGENCY_PAUSE_THRESHOLD})")
+                        logging.warning(f"Implementing emergency pause of {EMERGENCY_PAUSE_DURATION} seconds")
+                        # Force garbage collection
+                        gc.collect()
+                        # Sleep to allow system to recover
+                        time.sleep(EMERGENCY_PAUSE_DURATION)
+                        # Log memory after pause
+                        log_memory_usage("After emergency pause:")
+                    
                     # Get recipient's custom data
                     custom_data = {}
                     if hasattr(recipient, 'custom_data') and recipient.custom_data:
@@ -183,14 +269,14 @@ def _execute_campaign(app, campaign_id):
                         **custom_data
                     }
                     
-                    # For large campaigns, we need to be extremely aggressive about disabling tracking
-                    # to prevent SNS notification overload and 502 errors.
-                    # Since we need to handle up to 40k emails, we disable the return path tracking 
-                    # for ALL campaigns except very small test campaigns (<50 recipients).
-                    # This prevents SES from sending delivery notifications to our SNS endpoint.
-                    # We also add a small delay between emails for extremely large campaigns to 
-                    # prevent overwhelming both SES and our server.
-                    disable_tracking = total_recipients > 50  # Always disable tracking for non-test campaigns
+                    # IMPORTANT: Tracking is now permanently disabled for ALL campaigns
+                    # This prevents SNS notification overload and 502 errors.
+                    # We also completely disable the return path tracking to prevent SES
+                    # from sending any delivery notifications to our SNS endpoint.
+                    # This is necessary to prevent application crashes after sending ~1266 emails.
+                    # We still add a small delay between emails for all campaigns to 
+                    # prevent overwhelming the SES API.
+                    disable_tracking = True  # Always disable tracking for all campaigns
                     
                     # Send the email
                     message_id = email_service.send_template_email(
@@ -221,6 +307,9 @@ def _execute_campaign(app, campaign_id):
                         recipient.delivery_status = 'sent'
                         
                         logging.info(f"Email sent to {recipient.email}, message ID: {message_id}")
+                        
+                        # Update the campaign's sent_count for real-time progress
+                        campaign.sent_count = campaign.sent_count + 1
                     else:
                         recipient.status = 'failed'
                         recipient.error_message = 'Failed to send email'
@@ -249,6 +338,17 @@ def _execute_campaign(app, campaign_id):
             time.sleep(0.5)
             
             processed_count += batch_size
+            
+            # Update campaign with progress information after each batch
+            sent_count = EmailRecipient.query.filter_by(campaign_id=campaign_id, status='sent').count()
+            failed_count = EmailRecipient.query.filter_by(campaign_id=campaign_id, status='failed').count()
+            
+            # Update progress in the campaign object for real-time monitoring
+            campaign.total_processed = processed_count
+            campaign.progress_percentage = int((processed_count / total_recipients) * 100)
+            db.session.commit()
+            
+            logging.info(f"Campaign progress: {processed_count}/{total_recipients} processed ({campaign.progress_percentage}%)")
         
         # Update campaign status
         sent_count = EmailRecipient.query.filter_by(campaign_id=campaign_id, status='sent').count()

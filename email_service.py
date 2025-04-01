@@ -258,8 +258,8 @@ class SESEmailService:
     
     def send_template_email(self, recipient, subject, template_html, template_text=None, 
                            template_data=None, sender=None, sender_name=None, 
-                           tracking_enabled=True, campaign_id=None, recipient_id=None,
-                           tags=None, no_return_path=False):
+                           tracking_enabled=False, campaign_id=None, recipient_id=None,
+                           tags=None, no_return_path=True):
         """
         Send a templated email with optional personalization.
         

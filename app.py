@@ -859,13 +859,13 @@ def create_app(config_object='config.Config'):
     
     @app.route('/api/sns/ses-notification', methods=['POST'])
     def sns_notification_handler():
-        # Check if SNS notifications are globally disabled
-        if os.environ.get('DISABLE_SNS_NOTIFICATIONS', 'false').lower() == 'true':
-            app.logger.warning("⚠️ SNS notifications are disabled. Returning OK to prevent retries.")
-            return jsonify({
-                'success': True,
-                'message': 'SNS notifications are globally disabled'
-            }), 200
+        # SNS notifications are now permanently disabled to prevent application crashes
+        app.logger.warning("⚠️ SNS notifications are permanently disabled. Returning OK to prevent retries.")
+        app.logger.info("This helps prevent application crashes after sending large numbers of emails.")
+        return jsonify({
+            'success': True,
+            'message': 'SNS notifications are permanently disabled'
+        }), 200
             
         # Track SNS notification for AWS usage metrics
         try:

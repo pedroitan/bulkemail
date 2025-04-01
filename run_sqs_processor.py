@@ -12,6 +12,8 @@ import time
 import logging
 import os
 import sys
+import traceback
+import psutil
 from flask import Flask
 from dotenv import load_dotenv
 
@@ -29,12 +31,28 @@ logging.basicConfig(level=logging.INFO,
                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("SQSProcessor")
 
+def log_system_stats():
+    """Log system resource usage for debugging"""
+    try:
+        process = psutil.Process()
+        mem_info = process.memory_info()
+        logger.info(f"SYSTEM STATS: Memory: {mem_info.rss / 1024 / 1024:.2f}MB, "
+                   f"CPU: {psutil.cpu_percent()}%, "
+                   f"Connections: {len(process.connections())}, "
+                   f"Threads: {process.num_threads()}, "
+                   f"Open files: {len(process.open_files())}")
+    except Exception as e:
+        logger.error(f"Error logging system stats: {str(e)}")
+
 def main():
-    # Check if SQS processing is disabled
-    if os.environ.get('DISABLE_SQS_PROCESSING', 'false').lower() == 'true':
-        logger.warning("⚠️ SQS processing has been disabled. Exiting.")
-        logger.warning("Email sending will still work, but delivery tracking is disabled.")
-        return
+    # SQS processing is now permanently disabled to prevent notification flooding
+    logger.warning("⚠️ SQS processing has been permanently disabled.")
+    logger.warning("Email sending will still work, but delivery tracking is disabled.")
+    logger.warning("This helps prevent application crashes after sending large numbers of emails.")
+    return
+        
+    # Log initial system state
+    log_system_stats()
         
     # Print information about what this script does
     logger.info("=== Email Delivery Status Processor ===")
@@ -62,24 +80,48 @@ def main():
     
     # Run the processor in a loop
     logger.info("Starting SQS processor loop...")
+    crash_count = 0
+    max_crash_count = 5  # Prevent endless crash-restart cycles
+    processing_cycle_count = 0
+    
     try:
         while True:
             try:
-                logger.info("Checking SQS queue for notifications...")
+                processing_cycle_count += 1
+                
+                # Log system stats every 10 cycles to track resource usage
+                if processing_cycle_count % 10 == 0:
+                    log_system_stats()
+                    
+                logger.info(f"Checking SQS queue for notifications (cycle {processing_cycle_count})...")
                 messages_processed = process_sqs_queue_job()
                 
                 # Track SQS message processing in our stats
                 if messages_processed > 0:
                     try:
+                        # Log detailed message activity for debugging
+                        logger.info(f"Processed {messages_processed} SQS messages - tracking usage")
+                        
                         # Increment SQS message counter
                         for _ in range(messages_processed):
                             AWSUsageStats.increment_sqs_message_processed()
                             
                         # Get updated usage stats
                         usage = AWSUsageStats.get_monthly_usage()
-                        logger.info(f"AWS Free Tier Usage: {usage['email_total']}/3000 emails ({usage['email_percent']}%), {usage['sns_total']}/100000 SNS notifications ({usage['sns_percent']}%)")
+                        logger.info(f"AWS Free Tier Usage: {usage['email_total']}/3000 emails ({usage['email_percent']}%), "
+                                   f"{usage['sns_total']}/100000 SNS notifications ({usage['sns_percent']}%)")
+                        
+                        # If we've processed a high number of notifications, log system state
+                        if messages_processed > 50:
+                            logger.warning(f"High message load detected: {messages_processed} messages in one batch")
+                            log_system_stats()
+                            
                     except Exception as e:
                         logger.error(f"Error updating AWS usage stats: {str(e)}")
+                        logger.error(traceback.format_exc())
+                
+                # Reset crash counter after successful processing
+                crash_count = 0
                 
                 # Sleep for 15 seconds between processing batches
                 # This prevents overwhelming the server while still providing timely updates
@@ -87,10 +129,20 @@ def main():
                 time.sleep(15)
                 
             except Exception as e:
-                logger.error(f"Error processing SQS messages: {str(e)}")
-                # Wait a bit longer if there was an error
-                logger.info("Waiting 30 seconds before retrying...")
-                time.sleep(30)
+                crash_count += 1
+                logger.error(f"Error processing SQS messages (crash #{crash_count}): {str(e)}")
+                logger.error(traceback.format_exc())
+                log_system_stats()
+                
+                # If we're crashing repeatedly, increase wait time exponentially
+                wait_time = min(30 * (2 ** (crash_count - 1)), 300)  # Max 5 minutes
+                logger.info(f"Waiting {wait_time} seconds before retrying...")
+                time.sleep(wait_time)
+                
+                # If too many crashes, break loop and restart cleanly
+                if crash_count >= max_crash_count:
+                    logger.critical(f"Too many consecutive crashes ({crash_count}). Exiting to prevent instability.")
+                    return
                 
     except KeyboardInterrupt:
         logger.info("SQS processor stopped by user")
