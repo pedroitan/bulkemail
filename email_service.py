@@ -108,6 +108,12 @@ class SESEmailService:
             self.logger.info("SES client created successfully")
     
     def send_email(self, recipient, subject, body_html, body_text=None, sender=None, sender_name=None, tracking_enabled=True, campaign_id=None, recipient_id=None, no_return_path=False):
+        # Track email for AWS Free Tier usage monitoring
+        try:
+            from aws_usage import track_email_sent
+            track_email_sent()
+        except (ImportError, Exception) as e:
+            self.logger.debug(f"AWS usage tracking not available: {str(e)}")
         """
         Send an email using Amazon SES
         
@@ -133,6 +139,15 @@ class SESEmailService:
             sender = f"{sender_name} <{sender}>"
         
         try:
+            # Check if SNS notifications are globally disabled
+            sns_disabled = os.environ.get('DISABLE_SNS_NOTIFICATIONS', 'false').lower() == 'true'
+            if sns_disabled:
+                self.logger.info(f"SNS notifications are disabled - skipping configuration set for {recipient}")
+                # Don't use configuration set to prevent AWS from sending notifications
+                use_config_set = False
+            else:
+                use_config_set = True
+                
             # Apply tracking if enabled and we have the needed IDs
             if tracking_enabled and campaign_id and recipient_id and self.tracking_manager:
                 # Process HTML to add tracking pixel and convert links
@@ -173,8 +188,8 @@ class SESEmailService:
             # Initialize SES client
             self._ensure_client()
             
-            # First try with configuration set if it exists
-            if self.configuration_set:
+            # First try with configuration set if it exists and SNS notifications aren't disabled
+            if self.configuration_set and use_config_set:
                 try:
                     # Add configuration set to a copy of email_args for the first attempt
                     first_attempt_args = email_args.copy()
