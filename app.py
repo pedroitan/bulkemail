@@ -511,8 +511,12 @@ def create_app(config_object='config.Config'):
         campaign = EmailCampaign.query.get_or_404(campaign_id)
         form = UploadRecipientsForm()
         
-        # Get all recipient lists for selection
-        recipient_lists = RecipientList.query.order_by(RecipientList.name).all()
+        # Get all recipient lists for selection with error handling
+        try:
+            recipient_lists = RecipientList.query.order_by(RecipientList.name).all()
+        except Exception as e:
+            app.logger.error(f"Error fetching recipient lists: {str(e)}")
+            recipient_lists = []  # Provide empty list as fallback
         
         # Handle list selection
         list_id = request.args.get('list_id') or request.form.get('list_id')
@@ -582,6 +586,7 @@ def create_app(config_object='config.Config'):
             else:
                 flash('Invalid file format. Please upload a CSV or Excel file.', 'danger')
         
+        # Always ensure recipient_lists is passed, even if it might be empty
         return render_template('upload_recipients.html', form=form, campaign=campaign, recipient_lists=recipient_lists)
     
     @app.route('/campaigns/<int:campaign_id>/confirm-recipients', methods=['POST'])
