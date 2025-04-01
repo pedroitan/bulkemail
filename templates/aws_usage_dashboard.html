@@ -1,0 +1,245 @@
+{% extends 'base.html' %}
+
+{% block title %}AWS Usage Dashboard{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="mb-4">AWS Usage Dashboard</h1>
+    
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="card-title mb-0">Monthly AWS Free Tier Usage</h5>
+                </div>
+                <div class="card-body">
+                    <div class="progress-container mb-4">
+                        <div class="d-flex justify-content-between mb-1">
+                            <span>Amazon SES Email Sending</span>
+                            <span id="email-usage-text">Loading...</span>
+                        </div>
+                        <div class="progress" style="height: 25px;">
+                            <div id="email-progress" class="progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+                        </div>
+                        <small class="text-muted">Free tier limit: 3,000 emails per month</small>
+                    </div>
+
+                    <div class="progress-container mb-2">
+                        <div class="d-flex justify-content-between mb-1">
+                            <span>Amazon SNS Notifications</span>
+                            <span id="sns-usage-text">Loading...</span>
+                        </div>
+                        <div class="progress" style="height: 25px;">
+                            <div id="sns-progress" class="progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+                        </div>
+                        <small class="text-muted">Free tier limit: 100,000 notifications per month</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="card mb-4">
+                <div class="card-header bg-info text-white">
+                    <h5 class="card-title mb-0">Today's Stats</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <div class="p-3 border rounded text-center">
+                                <h3 id="today-emails" class="mb-1">-</h3>
+                                <p class="mb-0 text-muted">Emails Sent</p>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <div class="p-3 border rounded text-center">
+                                <h3 id="today-delivered" class="mb-1">-</h3>
+                                <p class="mb-0 text-muted">Emails Delivered</p>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <div class="p-3 border rounded text-center">
+                                <h3 id="today-sns" class="mb-1">-</h3>
+                                <p class="mb-0 text-muted">SNS Notifications</p>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <div class="p-3 border rounded text-center">
+                                <h3 id="today-sqs" class="mb-1">-</h3>
+                                <p class="mb-0 text-muted">SQS Messages</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row">
+        <div class="col-12">
+            <div class="card mb-4">
+                <div class="card-header bg-success text-white">
+                    <h5 class="card-title mb-0">AWS Free Tier Optimization Recommendations</h5>
+                </div>
+                <div class="card-body">
+                    <ul class="list-group">
+                        <li class="list-group-item">
+                            <strong>Reduce SNS notification volume:</strong> Filter out high-volume, low-importance notifications (delivery, open, click)
+                        </li>
+                        <li class="list-group-item">
+                            <strong>Batch email sending:</strong> Send emails in batches to reduce per-message overhead
+                        </li>
+                        <li class="list-group-item">
+                            <strong>SQS message retention:</strong> Reduce message retention period from 4 days to 1 day
+                        </li>
+                        <li class="list-group-item">
+                            <strong>Campaign scheduling:</strong> Add cooldown periods between large campaigns to spread usage across billing cycles
+                        </li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="text-center mb-4">
+                <a href="/aws-optimizer" class="btn btn-primary">Run AWS Usage Optimizer</a>
+                <button id="cloudwatch-refresh" class="btn btn-info ml-2">Refresh from CloudWatch</button>
+                <a href="/dashboard" class="btn btn-secondary ml-2">Back to Dashboard</a>
+            </div>
+            
+            <div id="cloudwatch-status" class="alert alert-info d-none">
+                <i class="fas fa-sync fa-spin mr-2"></i>
+                <span id="cloudwatch-message">Refreshing data from AWS CloudWatch...</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Fetch and update AWS usage data
+function fetchUsageStats(useCloudWatch = false) {
+    // Show CloudWatch status if using real-time data
+    if (useCloudWatch) {
+        const statusBox = document.getElementById('cloudwatch-status');
+        statusBox.classList.remove('d-none', 'alert-danger');
+        statusBox.classList.add('alert-info');
+        document.getElementById('cloudwatch-message').textContent = 'Refreshing data from AWS CloudWatch...';
+    }
+    
+    // Build API URL with proper parameters
+    let url = '/api/aws-usage';
+    const params = [];
+    
+    // Only include CloudWatch parameter when explicitly requested
+    // This prevents automatic background refreshes from making CloudWatch API calls
+    if (useCloudWatch) {
+        params.push('use_cloudwatch=true');
+        // Always bypass cache when using CloudWatch to ensure fresh data
+        params.push('bypass_cache=true');
+    }
+    
+    // Add cache busting parameter for all requests to prevent stale data
+    // This helps with token bucket rate limiter by ensuring we see the latest updates
+    params.push('_=' + new Date().getTime());
+    
+    // Add parameters to URL
+    if (params.length > 0) {
+        url += '?' + params.join('&');
+    }
+    
+    fetch(url)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            // Update monthly progress bars
+            updateProgressBar('email', data.monthly.email_total, data.monthly.email_limit, data.monthly.email_percent);
+            updateProgressBar('sns', data.monthly.sns_total, data.monthly.sns_limit, data.monthly.sns_percent);
+            
+            // Update today's stats
+            document.getElementById('today-emails').textContent = data.today.emails_sent;
+            document.getElementById('today-delivered').textContent = data.today.emails_delivered;
+            document.getElementById('today-sns').textContent = data.today.sns_notifications;
+            document.getElementById('today-sqs').textContent = data.today.sqs_messages;
+            
+            // Show success message if this was a CloudWatch refresh
+            if (useCloudWatch) {
+                const statusBox = document.getElementById('cloudwatch-status');
+                statusBox.classList.remove('alert-info', 'alert-danger');
+                statusBox.classList.add('alert-success');
+                document.getElementById('cloudwatch-message').textContent = `Successfully updated from CloudWatch (${data.source === 'cloudwatch' ? 'using real AWS data' : 'using local tracking data'})`;;
+                
+                // Hide success message after 5 seconds
+                setTimeout(() => {
+                    statusBox.classList.add('d-none');
+                }, 5000);
+            }
+        })
+        .catch(error => {
+            console.error('Error fetching AWS usage data:', error);
+            
+            // Show error message if this was a CloudWatch refresh
+            if (useCloudWatch) {
+                const statusBox = document.getElementById('cloudwatch-status');
+                statusBox.classList.remove('alert-info', 'alert-success');
+                statusBox.classList.add('alert-danger');
+                document.getElementById('cloudwatch-message').textContent = `Error refreshing from CloudWatch: ${error.message}`;
+            }
+        });
+}
+
+// Update progress bar with usage data
+function updateProgressBar(type, value, limit, percent) {
+    const progressBar = document.getElementById(`${type}-progress`);
+    const usageText = document.getElementById(`${type}-usage-text`);
+    
+    // Update progress bar
+    progressBar.style.width = `${percent}%`;
+    progressBar.textContent = `${percent}%`;
+    progressBar.setAttribute('aria-valuenow', percent);
+    
+    // Update text
+    usageText.textContent = `${value} / ${limit.toLocaleString()}`;
+    
+    // Change color based on usage
+    if (percent > 90) {
+        progressBar.classList.remove('bg-success', 'bg-warning');
+        progressBar.classList.add('bg-danger');
+    } else if (percent > 70) {
+        progressBar.classList.remove('bg-success', 'bg-danger');
+        progressBar.classList.add('bg-warning');
+    } else {
+        progressBar.classList.remove('bg-warning', 'bg-danger');
+        progressBar.classList.add('bg-success');
+    }
+}
+
+// Load usage stats when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    // Initial load with local data (faster, no API calls to AWS)
+    fetchUsageStats(false);
+    
+    // Add click handler for CloudWatch refresh button
+    document.getElementById('cloudwatch-refresh').addEventListener('click', function() {
+        // Disable button during refresh to prevent multiple API calls
+        this.disabled = true;
+        this.innerHTML = '<i class="fas fa-sync fa-spin"></i> Refreshing...';
+        
+        // Use CloudWatch data (makes API calls to AWS)
+        fetchUsageStats(true);
+        
+        // Re-enable button after 5 seconds to prevent overloading with requests
+        // This works with your token bucket rate limiter to ensure we don't overwhelm the system
+        setTimeout(() => {
+            this.disabled = false;
+            this.innerHTML = 'Refresh from CloudWatch';
+        }, 5000);
+    });
+    
+    // Refresh data every 5 minutes (using local tracking only)
+    // This ensures we don't make AWS API calls automatically in the background
+    setInterval(() => fetchUsageStats(false), 300000);
+});
+</script>
+{% endblock %}
