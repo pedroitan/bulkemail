@@ -1,6 +1,6 @@
 # Bulk Email Scheduler with Amazon SES
 
-A web application for scheduling and sending bulk emails using Amazon SES (Simple Email Service) with advanced tracking and verification capabilities.
+A web application for scheduling and sending bulk emails using Amazon SES (Simple Email Service) with advanced tracking, notification handling, and verification capabilities. The application uses a robust SNS-SQS notification flow to reliably process email delivery events even for large campaigns.
 
 ## Features
 
@@ -14,7 +14,10 @@ A web application for scheduling and sending bulk emails using Amazon SES (Simpl
 - **Email bounce tracking** with detailed diagnostics
 - **Email verification** to reduce bounces and protect sender reputation
 - **Open and click tracking** to monitor recipient engagement
-- **Real-time delivery status updates** using AWS SNS notifications
+- **Comprehensive event handling** for all SES notification types (Bounce, Complaint, Delivery, DeliveryDelay, Send)
+- **Real-time delivery status updates** using AWS SNS-SQS notification flow
+- **Robust large campaign handling** for reliably sending thousands of emails 
+- **Rate-limited notification processing** to prevent server overload
 
 ## Architecture
 
@@ -24,6 +27,11 @@ The application is built with a modern architecture focusing on reliability and 
 - **Non-blocking UI**: Form-based operations for critical actions with automatic page refresh
 - **Real-time Updates**: Auto-refreshing tables show delivery status changes without requiring page reload
 - **AWS Integration**: Seamless integration with AWS SES for sending and AWS SNS for tracking
+- **SQS Message Processing**: Resilient SQS-based notification handling for all event types (Send, Delivery, Bounce, Complaint, DeliveryDelay)
+- **Rate Limiting**: Token bucket rate limiter for SNS notifications to prevent server overload during large campaigns
+- **Adaptive Notification Handling**: Intelligent handling of notifications based on campaign size
+- **Enhanced Worker Configuration**: Optimized Gunicorn settings for handling large campaigns
+- **Synchronous Processing**: Efficient processing of email campaigns without requiring separate worker processes
 
 ## Setup
 
@@ -31,9 +39,10 @@ The application is built with a modern architecture focusing on reliability and 
 
 - Python 3.8+ installed
 - AWS account with SES access
-- AWS account with SNS access (for bounce notifications)
+- AWS account with SNS access (for event notifications)
+- AWS account with SQS access (for processing notifications)
 - Verified email address or domain in SES
-- AWS access key and secret key with SES permissions
+- AWS access key and secret key with appropriate permissions (SES, SNS, SQS)
 
 ### Installation
 
@@ -165,6 +174,39 @@ The application is built with a modern architecture focusing on reliability and 
    - Bounces and complaints
    - Individual recipient status
 
+## Handling Large Campaigns
+
+The system includes special optimizations for handling large email campaigns (100+ recipients):
+
+### Automatic Notification Management
+
+- For campaigns with more than 100 recipients, the system automatically adjusts SES notification settings to prevent server overload
+- Critical notifications (bounces, complaints) are always processed, while less important notifications may be rate-limited or disabled
+- This prevents 502 Bad Gateway errors that can occur when processing thousands of notifications simultaneously
+
+### Rate Limiting Implementation
+
+- A token bucket rate limiter manages the flow of SNS notifications to the server
+- This ensures the server remains responsive even during high-volume campaigns
+- The rate limiter prioritizes critical notifications (bounces, complaints) over delivery notifications
+
+### Sending Best Practices
+
+When sending large campaigns (1,000+ recipients):
+
+1. **Batch Processing**: Break extremely large campaigns into smaller batches of 1,000-3,000 recipients
+2. **Monitoring**: Keep an eye on the campaign progress and notification logs
+3. **Scheduling**: Send large campaigns during off-peak hours to minimize impact on other operations
+4. **Testing**: Always test with a small subset of recipients before launching the full campaign
+
+### Server Configuration
+
+The application uses optimized Gunicorn settings for handling large workloads:
+
+- Extended worker timeout (120 seconds) to prevent timeout errors during high-volume processing
+- Worker recycling to prevent memory issues during long-running campaigns
+- Multiple workers to handle concurrent requests efficiently
+
 ## Troubleshooting
 
 ### Email Sending Issues
@@ -182,6 +224,36 @@ The application is built with a modern architecture focusing on reliability and 
 - Check that the configuration set is properly set up in SES
 - Ensure your IAM user has permissions to receive notifications
 - Review the SNS subscription settings in the AWS console
+
+### Large Campaign Issues
+
+- If you encounter 502 errors during large campaigns, check the server logs for notification volume
+- Consider breaking very large campaigns (10,000+ recipients) into smaller batches
+- Verify your Render service plan has sufficient resources for your campaign volume
+- Use the `DISABLE_TRACKING_THRESHOLD` environment variable to adjust when notification tracking is disabled (default: 100)
+
+## Performance Considerations
+
+### Memory Usage
+
+- The application is designed to minimize memory usage during large campaigns
+- Email sending occurs in batches with small delays to prevent server overload
+- Worker processes are recycled after handling a certain number of requests to prevent memory leaks
+
+### Notification Processing
+
+- SNS notifications are processed with a token bucket rate limiter (10 notifications per second)
+- Critical notifications (bounces, complaints) bypass the rate limiter to ensure delivery status is accurately tracked
+- For campaigns over 100 recipients, most delivery notifications are automatically disabled to reduce server load
+
+### Scaling Guidelines
+
+| Campaign Size | Recommended Configuration                                      |
+|---------------|---------------------------------------------------------------|
+| < 100         | Default settings with full notification tracking               |
+| 100 - 1,000   | Automatic notification limitation for non-critical events      |
+| 1,000 - 5,000 | Break into multiple batches of 1,000 recipients               |
+| > 5,000       | Consider upgrading Render plan or using a dedicated server     |
 
 ## Development
 
