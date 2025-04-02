@@ -60,14 +60,26 @@ def init_db(max_retries=5, retry_delay=3):
     import sqlalchemy as sa
     from sqlalchemy.ext.declarative import declarative_base
     
-    # Override the original declarative base to handle missing columns
-    original_init = sa.orm.instrumentation._EventsHold.__init__
-    
-    def _events_hold_init(self, class_):
-        original_init(self, class_)
-        self.dispatch._sa_event_failed_dispatch = lambda *args, **kwargs: None
-    
-    sa.orm.instrumentation._EventsHold.__init__ = _events_hold_init
+    # Handle SQLAlchemy version differences
+    try:
+        logging.info("Attempting to set up SQLAlchemy error handling")
+        # Check if the attribute exists before trying to modify it
+        if hasattr(sa.orm.instrumentation, '_EventsHold'):
+            # Override the original declarative base to handle missing columns
+            original_init = sa.orm.instrumentation._EventsHold.__init__
+            
+            def _events_hold_init(self, class_):
+                original_init(self, class_)
+                if hasattr(self.dispatch, '_sa_event_failed_dispatch'):
+                    self.dispatch._sa_event_failed_dispatch = lambda *args, **kwargs: None
+            
+            sa.orm.instrumentation._EventsHold.__init__ = _events_hold_init
+            logging.info("Successfully set up SQLAlchemy error handling")
+        else:
+            logging.warning("SQLAlchemy _EventsHold not found - skipping monkey patch")
+    except Exception as e:
+        logging.warning(f"Could not set up SQLAlchemy error handling: {e}")
+        # Continue without the patch - we'll handle errors differently
     
     # Get application instance
     app = get_app()
@@ -105,9 +117,29 @@ def init_db(max_retries=5, retry_delay=3):
                         logging.error(f"Database connection failed: {conn_error}")
                         raise conn_error
                 
-                # Create all tables
-                db.create_all()
-                logging.info("Database initialized successfully!")
+                # Create all tables with careful error handling for SQLAlchemy version differences
+                try:
+                    db.create_all()
+                    logging.info("Database initialized successfully!")
+                except Exception as create_error:
+                    # Try an alternative approach - some errors might be due to SQLAlchemy version differences
+                    logging.warning(f"Standard initialization failed: {create_error}. Trying alternative approach...")
+                    
+                    # Create tables individually if possible
+                    try:
+                        # Get metadata from models
+                        logging.info("Creating tables individually...")
+                        Base = db.Model
+                        for table in Base.metadata.sorted_tables:
+                            try:
+                                logging.info(f"Creating table: {table.name}")
+                                table.create(db.engine, checkfirst=True)
+                            except Exception as table_error:
+                                logging.warning(f"Could not create table {table.name}: {table_error}")
+                        logging.info("Individual table creation completed")
+                    except Exception as alt_error:
+                        logging.error(f"Alternative initialization approach also failed: {alt_error}")
+                        raise alt_error
                 
                 # Verify tables were created
                 try:
