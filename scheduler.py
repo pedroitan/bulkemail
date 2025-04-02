@@ -331,7 +331,7 @@ def _execute_campaign(app, campaign_id, segment_start=0, segment_size=None):
                                 
                                 # Store progress for resuming later
                                 campaign.status = 'segmented'
-                                campaign.last_segment_position = next_segment_start
+                                # TEMP_DISABLED: campaign.last_segment_position = next_segment_start
                                 db.session.commit()
                                 
                                 return {
@@ -536,16 +536,16 @@ def _execute_campaign(app, campaign_id, segment_start=0, segment_size=None):
             logging.info(f"Campaign progress: {processed_count}/{total_recipients} processed ({campaign.progress_percentage}%)")
         
         # Handle campaign segmentation for large campaigns
-        if segment_size is not None or (total_recipients == MAX_EMAILS_PER_SEGMENT and campaign.total_recipients > MAX_EMAILS_PER_SEGMENT):
+        if segment_size is not None or (total_recipients == MAX_EMAILS_PER_SEGMENT and len(recipient_ids) if "recipient_ids" in locals() else 0 > MAX_EMAILS_PER_SEGMENT):
             # We just processed a segment of a larger campaign
             next_segment_start = segment_start + total_recipients
             
             # Check if there are more segments to process
-            if next_segment_start < campaign.total_recipients:
+            if next_segment_start < len(recipient_ids) if "recipient_ids" in locals() else 0:
                 logging.info(f"Segment complete. Next segment will start at position {next_segment_start}")
                 campaign.status = 'segmented'
-                campaign.last_segment_position = next_segment_start
-                campaign.next_segment_time = datetime.now() + timedelta(seconds=SEGMENT_COOLDOWN_PERIOD)
+                # TEMP_DISABLED: campaign.last_segment_position = next_segment_start
+                # TEMP_DISABLED: campaign.next_segment_time = datetime.now() + timedelta(seconds=SEGMENT_COOLDOWN_PERIOD)
                 db.session.commit()
                 
                 # Schedule next segment to run after cooldown
@@ -823,7 +823,8 @@ def campaign_detail(campaign_id):
     return render_template('campaign_detail.html', 
                          campaign=campaign, 
                          recipients=recipients,
-                         total_recipients=total_recipients,
+                         # TEMPORARILY COMMENTED OUT - will be added back after deployment
+                # total_recipients=total_recipients,
                          recipient_stats=recipient_stats)
 
 @app.route('/campaigns/<int:campaign_id>/edit-recipients', methods=['GET', 'POST'])

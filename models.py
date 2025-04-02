@@ -33,9 +33,10 @@ class EmailCampaign(db.Model):
     progress_percentage = db.Column(db.Integer, default=0)  # Percentage of completion
     
     # Fields for campaign segmentation to prevent crashes on large campaigns
-    total_recipients = db.Column(db.Integer, default=0)  # Total number of recipients in the campaign
-    last_segment_position = db.Column(db.Integer, default=0)  # Last processed position for segmented campaigns
-    next_segment_time = db.Column(db.DateTime, nullable=True)  # When to run the next segment
+    # TEMPORARILY COMMENTED OUT - will be added back after deployment
+    # total_recipients = db.Column(db.Integer, default=0)  # Total number of recipients in the campaign
+    # last_segment_position = db.Column(db.Integer, default=0)  # Last processed position for segmented campaigns
+    # next_segment_time = db.Column(db.DateTime, nullable=True)  # When to run the next segment
     
     # Relationship with EmailRecipient
     recipients = db.relationship('EmailRecipient', backref='campaign', lazy=True, cascade='all, delete-orphan')
@@ -136,7 +137,7 @@ class RecipientList(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Statistics fields
-    total_recipients = db.Column(db.Integer, default=0)
+    # TEMP_DISABLED:     total_recipients = db.Column(db.Integer, default=0)
     active_recipients = db.Column(db.Integer, default=0)
     bounced_recipients = db.Column(db.Integer, default=0)
     complained_recipients = db.Column(db.Integer, default=0)
