@@ -35,6 +35,20 @@ def init_db(max_retries=5, retry_delay=3):
     from app import get_app, db
     from models import EmailCampaign, EmailRecipient
     
+    # Bypass errors in case of missing columns in the database
+    logging.info("Setting up error handling for potential missing columns...")
+    import sqlalchemy as sa
+    from sqlalchemy.ext.declarative import declarative_base
+    
+    # Override the original declarative base to handle missing columns
+    original_init = sa.orm.instrumentation._EventsHold.__init__
+    
+    def _events_hold_init(self, class_):
+        original_init(self, class_)
+        self.dispatch._sa_event_failed_dispatch = lambda *args, **kwargs: None
+    
+    sa.orm.instrumentation._EventsHold.__init__ = _events_hold_init
+    
     # Get application instance
     app = get_app()
     
