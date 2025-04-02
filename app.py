@@ -328,147 +328,147 @@ def fix_database_schema():
         </html>
         """
 @app.route('/')
-    def index():
-        # Dashboard overview
-        campaigns = EmailCampaign.query.order_by(EmailCampaign.created_at.desc()).all()
-        # Calculate statistics for dashboard
-        stats = {
-            'total': len(campaigns),
+def index():
+    # Dashboard overview
+    campaigns = EmailCampaign.query.order_by(EmailCampaign.created_at.desc()).all()
+    # Calculate statistics for dashboard
+    stats = {
+        'total': len(campaigns),
             'scheduled': EmailCampaign.query.filter_by(status='scheduled').count(),
             'in_progress': EmailCampaign.query.filter_by(status='in_progress').count(),
             'completed': EmailCampaign.query.filter_by(status='completed').count(),
             'failed': EmailCampaign.query.filter_by(status='failed').count()
-        }
-        # Get recent campaigns for dashboard
-        recent_campaigns = campaigns[:5] if campaigns else []
-        return render_template('index.html', campaigns=recent_campaigns, stats=stats)
+    }
+    # Get recent campaigns for dashboard
+    recent_campaigns = campaigns[:5] if campaigns else []
+    return render_template('index.html', campaigns=recent_campaigns, stats=stats)
+
+@app.route('/campaigns')
+def campaigns():
+    # List all campaigns
+    campaigns = EmailCampaign.query.order_by(EmailCampaign.created_at.desc()).all()
+    return render_template('campaigns.html', campaigns=campaigns)
+
+@app.route('/campaigns/create', methods=['GET', 'POST'])
+def create_campaign():
+    form = CampaignForm()
     
-    @app.route('/campaigns')
-    def campaigns():
-        # List all campaigns
-        campaigns = EmailCampaign.query.order_by(EmailCampaign.created_at.desc()).all()
-        return render_template('campaigns.html', campaigns=campaigns)
+    # Populate the sender domain dropdown with verified domains from config
+    domains = app.config.get('SENDER_DOMAINS', [])
+    if domains:
+        form.sender_domain.choices = [(domain, domain) for domain in domains if domain]
+            
+        # Set vendo147.com as the default domain if it exists in choices
+        if not form.is_submitted() and 'vendo147.com' in [choice[0] for choice in form.sender_domain.choices]:
+            form.sender_domain.data = 'vendo147.com'
     
-    @app.route('/campaigns/create', methods=['GET', 'POST'])
-    def create_campaign():
-        form = CampaignForm()
-        
-        # Populate the sender domain dropdown with verified domains from config
-        domains = app.config.get('SENDER_DOMAINS', [])
-        if domains:
-            form.sender_domain.choices = [(domain, domain) for domain in domains if domain]
-            
-            # Set vendo147.com as the default domain if it exists in choices
-            if not form.is_submitted() and 'vendo147.com' in [choice[0] for choice in form.sender_domain.choices]:
-                form.sender_domain.data = 'vendo147.com'
-        
-        # Pre-populate sender email field with username part of the default sender email
-        default_email = app.config.get('SENDER_EMAIL')
-        if default_email and '@' in default_email:
-            username, domain = default_email.split('@', 1)
-            if not form.is_submitted():
-                form.sender_email.data = username
-            
-            # Select the domain in the dropdown if it exists in choices
-            if domain in [choice[0] for choice in form.sender_domain.choices]:
-                form.sender_domain.data = domain
-        
-        if form.validate_on_submit():
-            # Combine the sender email username and domain
-            full_sender_email = f"{form.sender_email.data}@{form.sender_domain.data}"
-            
-            # Create new campaign
-            campaign = EmailCampaign(
-                name=form.name.data,
-                subject=form.subject.data,
-                body_html=form.body_html.data,
-                body_text=form.body_text.data,
-                sender_name=form.sender_name.data,
-                sender_email=full_sender_email,  # Store the full sender email
-                scheduled_time=form.scheduled_time.data,
-                status='scheduled' if form.scheduled_time.data else 'draft'
-            )
-            db.session.add(campaign)
-            db.session.commit()
-            
-            # Schedule the campaign if a time is set
-            if form.scheduled_time.data and form.scheduled_time.data > datetime.now():
-                app.get_scheduler().schedule_campaign(campaign.id, campaign.scheduled_time)
-                flash('Campaign scheduled successfully!', 'success')
-            else:
-                flash('Campaign created as draft!', 'success')
-            
-            return redirect(url_for('upload_recipients', campaign_id=campaign.id))
-        
-        return render_template('create_campaign.html', form=form)
-    
-    @app.route('/campaigns/<int:campaign_id>/edit', methods=['GET', 'POST'])
-    def edit_campaign(campaign_id):
-        campaign = EmailCampaign.query.get_or_404(campaign_id)
-        form = CampaignForm(obj=campaign)
-        
-        # Populate the sender domain dropdown with verified domains from config
-        domains = app.config.get('SENDER_DOMAINS', [])
-        if domains:
-            form.sender_domain.choices = [(domain, domain) for domain in domains if domain]
-            
-            # If this is a new form load (not a submission) and no sender email exists
-            if not form.is_submitted() and (not campaign.sender_email or '@' not in campaign.sender_email):
-                # Set vendo147.com as the default domain
-                if 'vendo147.com' in [choice[0] for choice in form.sender_domain.choices]:
-                    form.sender_domain.data = 'vendo147.com'
-        
-        # Split the sender email into username and domain if it's in the campaign
-        if campaign.sender_email and '@' in campaign.sender_email and not form.is_submitted():
-            username, domain = campaign.sender_email.split('@', 1)
+    # Pre-populate sender email field with username part of the default sender email
+    default_email = app.config.get('SENDER_EMAIL')
+    if default_email and '@' in default_email:
+        username, domain = default_email.split('@', 1)
+        if not form.is_submitted():
             form.sender_email.data = username
-            if domain in [choice[0] for choice in form.sender_domain.choices]:
-                form.sender_domain.data = domain
         
-        if form.validate_on_submit():
-            old_scheduled_time = campaign.scheduled_time
-            
-            # Update basic campaign fields
-            form.populate_obj(campaign)
-            
-            # Combine the sender email username and domain
-            campaign.sender_email = f"{form.sender_email.data}@{form.sender_domain.data}"
-            
-            # Update status based on scheduled time
-            if campaign.scheduled_time and campaign.scheduled_time > datetime.now():
-                campaign.status = 'scheduled'
-            elif not campaign.scheduled_time:
-                # Reset status to draft even if it was previously completed
-                campaign.status = 'draft'
-            
-            db.session.commit()
-            flash('Campaign updated successfully', 'success')
-            
-            return redirect(url_for('campaign_detail', campaign_id=campaign.id))
-        
-        return render_template('edit_campaign.html', form=form, campaign=campaign)
+        # Select the domain in the dropdown if it exists in choices
+        if domain in [choice[0] for choice in form.sender_domain.choices]:
+            form.sender_domain.data = domain
     
-    @app.route('/campaigns/<int:campaign_id>/delete', methods=['POST', 'DELETE'])
-    def delete_campaign(campaign_id):
-        """Delete a campaign"""
-        try:
-            campaign = EmailCampaign.query.get_or_404(campaign_id)
-            
-            # Delete all recipients associated with the campaign
-            EmailRecipient.query.filter_by(campaign_id=campaign_id).delete()
-            
-            # Delete the campaign
-            db.session.delete(campaign)
-            db.session.commit()
-            
-            # Add flash message
-            flash('Campaign deleted successfully', 'success')
-        except Exception as e:
-            db.session.rollback()
-            flash(f'Error deleting campaign: {str(e)}', 'danger')
+    if form.validate_on_submit():
+        # Combine the sender email username and domain
+        full_sender_email = f"{form.sender_email.data}@{form.sender_domain.data}"
         
-        # Always redirect to campaigns list
-        return redirect(url_for('campaigns'))
+        # Create new campaign
+        campaign = EmailCampaign(
+            name=form.name.data,
+            subject=form.subject.data,
+            body_html=form.body_html.data,
+            body_text=form.body_text.data,
+            sender_name=form.sender_name.data,
+            sender_email=full_sender_email,  # Store the full sender email
+            scheduled_time=form.scheduled_time.data,
+            status='scheduled' if form.scheduled_time.data else 'draft'
+        )
+        db.session.add(campaign)
+        db.session.commit()
+        
+        # Schedule the campaign if a time is set
+        if form.scheduled_time.data and form.scheduled_time.data > datetime.now():
+            app.get_scheduler().schedule_campaign(campaign.id, campaign.scheduled_time)
+            flash('Campaign scheduled successfully!', 'success')
+        else:
+            flash('Campaign created as draft!', 'success')
+        
+        return redirect(url_for('upload_recipients', campaign_id=campaign.id))
+    
+    return render_template('create_campaign.html', form=form)
+    
+@app.route('/campaigns/<int:campaign_id>/edit', methods=['GET', 'POST'])
+def edit_campaign(campaign_id):
+    campaign = EmailCampaign.query.get_or_404(campaign_id)
+    form = CampaignForm(obj=campaign)
+    
+    # Populate the sender domain dropdown with verified domains from config
+    domains = app.config.get('SENDER_DOMAINS', [])
+    if domains:
+        form.sender_domain.choices = [(domain, domain) for domain in domains if domain]
+        
+        # If this is a new form load (not a submission) and no sender email exists
+        if not form.is_submitted() and (not campaign.sender_email or '@' not in campaign.sender_email):
+            # Set vendo147.com as the default domain
+            if 'vendo147.com' in [choice[0] for choice in form.sender_domain.choices]:
+                form.sender_domain.data = 'vendo147.com'
+    
+    # Split the sender email into username and domain if it's in the campaign
+    if campaign.sender_email and '@' in campaign.sender_email and not form.is_submitted():
+        username, domain = campaign.sender_email.split('@', 1)
+        form.sender_email.data = username
+        if domain in [choice[0] for choice in form.sender_domain.choices]:
+            form.sender_domain.data = domain
+    
+    if form.validate_on_submit():
+        old_scheduled_time = campaign.scheduled_time
+        
+        # Update basic campaign fields
+        form.populate_obj(campaign)
+        
+        # Combine the sender email username and domain
+        campaign.sender_email = f"{form.sender_email.data}@{form.sender_domain.data}"
+        
+        # Update status based on scheduled time
+        if campaign.scheduled_time and campaign.scheduled_time > datetime.now():
+            campaign.status = 'scheduled'
+        elif not campaign.scheduled_time:
+            # Reset status to draft even if it was previously completed
+            campaign.status = 'draft'
+        
+        db.session.commit()
+        flash('Campaign updated successfully', 'success')
+        
+        return redirect(url_for('campaign_detail', campaign_id=campaign.id))
+    
+    return render_template('edit_campaign.html', form=form, campaign=campaign)
+    
+@app.route('/campaigns/<int:campaign_id>/delete', methods=['POST', 'DELETE'])
+def delete_campaign(campaign_id):
+    """Delete a campaign"""
+    try:
+        campaign = EmailCampaign.query.get_or_404(campaign_id)
+        
+        # Delete all recipients associated with the campaign
+        EmailRecipient.query.filter_by(campaign_id=campaign_id).delete()
+        
+        # Delete the campaign
+        db.session.delete(campaign)
+        db.session.commit()
+        
+        # Add flash message
+        flash('Campaign deleted successfully', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error deleting campaign: {str(e)}', 'danger')
+    
+    # Always redirect to campaigns list
+    return redirect(url_for('campaigns'))
     
     @app.route('/campaigns/<int:campaign_id>/delete-redirect', methods=['POST'])
     def delete_campaign_with_redirect(campaign_id):
