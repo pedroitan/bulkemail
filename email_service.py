@@ -7,14 +7,68 @@ preventing issues when working outside the Flask application context.
 """
 
 import boto3
-from botocore.exceptions import ClientError
+from botocore.exceptions import ClientError, WaiterError, ConnectionClosedError
 import logging
 import time
+import random
 from flask import current_app
 from string import Template
 import os
 from dotenv import load_dotenv, find_dotenv
 import uuid
+import threading
+
+# AWS SES rate limiter to prevent API throttling
+class SESRateLimiter:
+    """
+    Rate limiter for AWS SES to prevent throttling errors
+    Implements token bucket algorithm with retry logic and jitter
+    """
+    def __init__(self, max_send_rate=10, recovery_period=1.0):
+        self.max_send_rate = max_send_rate  # Max emails per second
+        self.recovery_period = recovery_period  # Time to refill one token
+        self.available_tokens = max_send_rate
+        self.last_refill_time = time.time()
+        self.lock = threading.Lock()
+        self.logger = logging.getLogger(__name__)
+    
+    def wait_for_token(self, retries=5):
+        """Wait until a token is available, with exponential backoff on failure"""
+        retry_count = 0
+        max_wait = 60  # Maximum wait time in seconds
+        
+        while retry_count < retries:
+            with self.lock:
+                self._refill_tokens()
+                if self.available_tokens >= 1:
+                    self.available_tokens -= 1
+                    return True
+                
+                # Calculate wait time with exponential backoff and jitter
+                if retry_count == 0:
+                    wait_time = self.recovery_period
+                else:
+                    # Exponential backoff with jitter to prevent thundering herd
+                    base_wait = min(self.recovery_period * (2 ** retry_count), max_wait)
+                    wait_time = base_wait * (0.75 + random.random() * 0.5)  # 75-125% randomization
+                    
+                self.logger.info(f"Rate limit reached. Waiting {wait_time:.2f}s before retrying (attempt {retry_count+1}/{retries})")
+            
+            # Sleep outside the lock to allow other threads to proceed
+            time.sleep(wait_time)
+            retry_count += 1
+        
+        return False
+    
+    def _refill_tokens(self):
+        """Refill tokens based on elapsed time"""
+        now = time.time()
+        elapsed = now - self.last_refill_time
+        new_tokens = elapsed / self.recovery_period
+        
+        if new_tokens > 0:
+            self.available_tokens = min(self.max_send_rate, self.available_tokens + new_tokens)
+            self.last_refill_time = now
 
 # SESEmailService class for sending emails through Amazon SES
 class SESEmailService:
@@ -53,8 +107,20 @@ class SESEmailService:
         self.configuration_set = None
         # Initialize sender_email to None so it gets loaded properly in _ensure_client
         self.sender_email = None
+        
+        # Add rate limiter for SES API calls
+        # Free tier limit is ~450 emails per day or ~14 per hour
+        # To stay safe, we'll limit to 10 per second with automatic throttling
+        self.rate_limiter = SESRateLimiter(max_send_rate=10, recovery_period=0.1)
+        
+        # Track number of emails sent through this service instance
+        self.emails_sent = 0
+        
+        # Track connection expiry - recreate client after 500 emails
+        self.connection_email_limit = 500
+        self.connection_timestamp = time.time()
     
-    def _ensure_client(self):
+    def _ensure_client(self, force_refresh=False):
         """
         Ensures the boto3 SES client is initialized when needed - implements lazy initialization.
         
@@ -67,7 +133,7 @@ class SESEmailService:
         This pattern prevents the common "RuntimeError: Working outside of application context"
         that occurs when Flask extensions are initialized at import time.
         """
-        if self.client is None:
+        if self.client is None or force_refresh:
             try:
                 # Always reload environment variables to get fresh values
                 load_dotenv(find_dotenv(), override=True)
@@ -103,9 +169,17 @@ class SESEmailService:
                 'ses',
                 aws_access_key_id=self.aws_access_key_id,
                 aws_secret_access_key=self.aws_secret_access_key,
-                region_name=self.region_name
+                region_name=self.region_name,
+                # Add connection timeouts and retries to prevent hanging
+                config=boto3.session.Config(
+                    connect_timeout=10,
+                    read_timeout=10,
+                    retries={'max_attempts': 3}
+                )
             )
             self.logger.info("SES client created successfully")
+            self.connection_timestamp = time.time()
+            self.emails_sent = 0
     
     def send_email(self, recipient, subject, body_html, body_text=None, sender=None, sender_name=None, tracking_enabled=True, campaign_id=None, recipient_id=None, no_return_path=False):
         # Track email for AWS Free Tier usage monitoring
@@ -185,8 +259,25 @@ class SESEmailService:
                 # Only add bounce notification path for tracked emails
                 email_args['ReturnPath'] = self.sender_email
                 
+            # Check if we need to refresh the client connection
+            self.emails_sent += 1
+            current_time = time.time()
+            connection_age = current_time - self.connection_timestamp
+            
+            # Reset connection after either sending many emails or connection being old
+            if self.emails_sent >= self.connection_email_limit or connection_age > 300:  # 5 minutes
+                self.logger.info(f"Refreshing AWS SES connection after {self.emails_sent} emails or {connection_age:.1f} seconds")
+                self.client = None
+                self.connection_timestamp = current_time
+                self.emails_sent = 0
+            
             # Initialize SES client
             self._ensure_client()
+            
+            # Apply rate limiting to prevent API throttling
+            if not self.rate_limiter.wait_for_token():
+                self.logger.warning("Failed to acquire rate limit token after multiple retries")
+                raise Exception("Rate limit exceeded - unable to send email after multiple retries")
             
             # First try with configuration set if it exists and SNS notifications aren't disabled
             if self.configuration_set and use_config_set:
@@ -337,8 +428,25 @@ class SESEmailService:
             else:
                 use_config_set = bool(self.configuration_set) and tracking_enabled  # Use it if it exists and tracking enabled
             
+            # Check if we need to refresh the client connection
+            self.emails_sent += 1
+            current_time = time.time()
+            connection_age = current_time - self.connection_timestamp
+            
+            # Reset connection after either sending many emails or connection being old
+            if self.emails_sent >= self.connection_email_limit or connection_age > 300:  # 5 minutes
+                self.logger.info(f"Refreshing AWS SES connection after {self.emails_sent} emails or {connection_age:.1f} seconds")
+                self.client = None
+                self.connection_timestamp = current_time
+                self.emails_sent = 0
+            
             # Initialize SES client
             self._ensure_client()
+            
+            # Apply rate limiting to prevent API throttling
+            if not self.rate_limiter.wait_for_token():
+                self.logger.warning("Failed to acquire rate limit token after multiple retries")
+                raise Exception("Rate limit exceeded - unable to send email after multiple retries")
             
             # Only try with configuration set if it exists AND we should use it
             if use_config_set:
