@@ -265,68 +265,70 @@ def create_app(config_object='config.Config'):
     
     # Register the recipient_lists blueprint
     app.register_blueprint(recipient_lists_bp)
+    
+    # Add the schema fix route
+    @app.route('/admin/fix-schema')
+    def fix_database_schema():
+        """Add missing columns to the email_campaign table"""
+        try:
+            # Connect to the database
+            with db.engine.connect() as conn:
+                # Check which columns already exist
+                columns_result = conn.execute(text(
+                    "SELECT column_name FROM information_schema.columns "
+                    "WHERE table_name = 'email_campaign'"
+                ))
+                existing_columns = [row[0] for row in columns_result]
+                
+                # Track which columns we've added
+                added_columns = []
+                
+                # Add missing columns if they don't exist
+                if 'total_recipients' not in existing_columns:
+                    conn.execute(text("ALTER TABLE email_campaign ADD COLUMN total_recipients INTEGER DEFAULT 0"))
+                    added_columns.append('total_recipients')
+                
+                if 'last_segment_position' not in existing_columns:
+                    conn.execute(text("ALTER TABLE email_campaign ADD COLUMN last_segment_position INTEGER DEFAULT 0"))
+                    added_columns.append('last_segment_position')
+                
+                if 'next_segment_time' not in existing_columns:
+                    conn.execute(text("ALTER TABLE email_campaign ADD COLUMN next_segment_time TIMESTAMP"))
+                    added_columns.append('next_segment_time')
+                
+                # Commit the transaction
+                trans = conn.begin()
+                trans.commit()
+                
+            return f"""
+            <html>
+                <head><title>Schema Update Complete</title></head>
+                <body>
+                    <h1>Database Schema Update</h1>
+                    <p>The following columns were added to the email_campaign table:</p>
+                    <ul>
+                        {''.join(f'<li>{col}</li>' for col in added_columns)}
+                    </ul>
+                    <p>If no columns are listed, they may already exist in the table.</p>
+                    <p><a href="/">Return to homepage</a></p>
+                </body>
+            </html>
+            """
+        except Exception as e:
+            return f"""
+            <html>
+                <head><title>Schema Update Error</title></head>
+                <body>
+                    <h1>Error Updating Schema</h1>
+                    <p>An error occurred while updating the database schema:</p>
+                    <pre>{str(e)}</pre>
+                    <p><a href="/">Return to homepage</a></p>
+                </body>
+            </html>
+            """
 
     # Routes
     
-@app.route('/admin/fix-schema')
-def fix_database_schema():
-    """Add missing columns to the email_campaign table"""
-    try:
-        # Connect to the database
-        with db.engine.connect() as conn:
-            # Check which columns already exist
-            columns_result = conn.execute(text(
-                "SELECT column_name FROM information_schema.columns "
-                "WHERE table_name = 'email_campaign'"
-            ))
-            existing_columns = [row[0] for row in columns_result]
-            
-            # Track which columns we've added
-            added_columns = []
-            
-            # Add missing columns if they don't exist
-            if 'total_recipients' not in existing_columns:
-                conn.execute(text("ALTER TABLE email_campaign ADD COLUMN total_recipients INTEGER DEFAULT 0"))
-                added_columns.append('total_recipients')
-            
-            if 'last_segment_position' not in existing_columns:
-                conn.execute(text("ALTER TABLE email_campaign ADD COLUMN last_segment_position INTEGER DEFAULT 0"))
-                added_columns.append('last_segment_position')
-            
-            if 'next_segment_time' not in existing_columns:
-                conn.execute(text("ALTER TABLE email_campaign ADD COLUMN next_segment_time TIMESTAMP"))
-                added_columns.append('next_segment_time')
-            
-            # Commit the transaction
-            trans = conn.begin()
-            trans.commit()
-            
-        return f"""
-        <html>
-            <head><title>Schema Update Complete</title></head>
-            <body>
-                <h1>Database Schema Update</h1>
-                <p>The following columns were added to the email_campaign table:</p>
-                <ul>
-                    {''.join(f'<li>{col}</li>' for col in added_columns)}
-                </ul>
-                <p>If no columns are listed, they may already exist in the table.</p>
-                <p><a href="/">Return to homepage</a></p>
-            </body>
-        </html>
-        """
-    except Exception as e:
-        return f"""
-        <html>
-            <head><title>Schema Update Error</title></head>
-            <body>
-                <h1>Error Updating Schema</h1>
-                <p>An error occurred while updating the database schema:</p>
-                <pre>{str(e)}</pre>
-                <p><a href="/">Return to homepage</a></p>
-            </body>
-        </html>
-        """
 @app.route('/')
 def index():
     # Dashboard overview
