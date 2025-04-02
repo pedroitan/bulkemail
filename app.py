@@ -21,6 +21,7 @@ import logging
 import threading
 import re
 from datetime import datetime, timedelta
+from sqlalchemy import inspect, text
 from models import db, EmailCampaign, EmailRecipient
 from forms import CampaignForm, UploadRecipientsForm
 from email_service import SESEmailService
@@ -2229,6 +2230,44 @@ def create_app(config_object='config.Config'):
     def direct_test():
         """Direct testing page with minimal dependencies"""
         return render_template('direct_test.html')
+        
+    @app.route('/admin/update-schema')
+    def admin_update_schema():
+        """Temporary admin route to update the database schema with missing columns"""
+        try:
+            # Manually run SQL to add the missing columns
+            with db.engine.connect() as connection:
+                # Check if columns exist
+                inspector = inspect(db.engine)
+                existing_columns = [column['name'] for column in inspector.get_columns('email_campaign')]
+                
+                # Add missing columns if needed
+                messages = []
+                
+                if 'total_recipients' not in existing_columns:
+                    connection.execute(text("ALTER TABLE email_campaign ADD COLUMN total_recipients INTEGER DEFAULT 0"))
+                    messages.append("Added total_recipients column")
+                    
+                if 'last_segment_position' not in existing_columns:
+                    connection.execute(text("ALTER TABLE email_campaign ADD COLUMN last_segment_position INTEGER DEFAULT 0"))
+                    messages.append("Added last_segment_position column")
+                    
+                if 'next_segment_time' not in existing_columns:
+                    connection.execute(text("ALTER TABLE email_campaign ADD COLUMN next_segment_time TIMESTAMP"))
+                    messages.append("Added next_segment_time column")
+                
+                if not messages:
+                    messages.append("All required columns already exist")
+                
+            # Return a simple HTML response
+            result = "<h1>Database Schema Update</h1>\n<ul>\n"
+            for message in messages:
+                result += f"<li>{message}</li>\n"
+            result += "</ul>\n<p><a href='/'>Return to home</a></p>"
+            
+            return result
+        except Exception as e:
+            return f"<h1>Error</h1><p>An error occurred: {str(e)}</p>"
 
     @app.route('/campaigns/<int:campaign_id>/start-form', methods=['POST'])
     def start_campaign_form(campaign_id):
