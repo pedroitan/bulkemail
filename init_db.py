@@ -31,8 +31,28 @@ def init_db(max_retries=5, retry_delay=3):
     """
     logging.info("Starting database initialization...")
     
-    # Import here to prevent circular imports
-    from app import get_app, db
+    # Import database components more safely
+    try:
+        # First try the temporary module if it exists
+        try:
+            from temp_app_fix import get_app, db
+            logging.info("Using temporary app module for database initialization")
+        except ImportError:
+            # Fall back to carefully importing just what we need from app
+            logging.info("Importing directly from app module")
+            # Import db directly to avoid executing route definitions
+            from models import db
+            # Create a minimal app just for initialization
+            from flask import Flask
+            app = Flask(__name__)
+            app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///app.db')
+            app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+            db.init_app(app)
+            def get_app():
+                return app
+    except Exception as e:
+        logging.error(f"Error importing database components: {e}")
+        return False
     from models import EmailCampaign, EmailRecipient
     
     # Bypass errors in case of missing columns in the database
@@ -127,8 +147,28 @@ def init_db(max_retries=5, retry_delay=3):
 
 def reset_db():
     """Reset the database by dropping and recreating all tables"""
-    # Import here to prevent circular imports
-    from app import get_app, db
+    # Import database components more safely
+    try:
+        # First try the temporary module if it exists
+        try:
+            from temp_app_fix import get_app, db
+            logging.info("Using temporary app module for database initialization")
+        except ImportError:
+            # Fall back to carefully importing just what we need from app
+            logging.info("Importing directly from app module")
+            # Import db directly to avoid executing route definitions
+            from models import db
+            # Create a minimal app just for initialization
+            from flask import Flask
+            app = Flask(__name__)
+            app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///app.db')
+            app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+            db.init_app(app)
+            def get_app():
+                return app
+    except Exception as e:
+        logging.error(f"Error importing database components: {e}")
+        return False
     
     app = get_app()
     with app.app_context():
