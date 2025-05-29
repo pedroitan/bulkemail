@@ -624,6 +624,65 @@ msgstr "Criar uma agora"
 msgid "View All Campaigns"
 msgstr "Ver Todas as Campanhas"
 
+# Verify Recipients page
+msgid "Verify Email Recipients"
+msgstr "Verificar Destinatários de Email"
+
+msgid "This tool verifies the email addresses in your campaign to reduce bounce rates. The verification process checks:"
+msgstr "Esta ferramenta verifica os endereços de email em sua campanha para reduzir taxas de rejeição. O processo de verificação inclui:"
+
+msgid "Email syntax validity"
+msgstr "Validade da sintaxe do email"
+
+msgid "Domain existence (DNS lookup)"
+msgstr "Existência do domínio (consulta DNS)"
+
+msgid "Basic MX record validation"
+msgstr "Validação básica de registros MX"
+
+msgid "Select Campaign"
+msgstr "Selecionar Campanha"
+
+msgid "Select a campaign"
+msgstr "Selecione uma campanha"
+
+msgid "Start Verification"
+msgstr "Iniciar Verificação"
+
+msgid "No campaigns available for verification."
+msgstr "Nenhuma campanha disponível para verificação."
+
+msgid "first."
+msgstr "primeiro."
+
+msgid "Back to Campaigns"
+msgstr "Voltar para Campanhas"
+
+# Email Tracking page
+msgid "Email Tracking - Campaign Reports"
+msgstr "Rastreamento de Email - Relatórios de Campanha"
+
+msgid "Email Tracking Reports"
+msgstr "Relatórios de Rastreamento de Email"
+
+msgid "Select a campaign to view its detailed tracking data. These reports show opens and clicks for emails sent in each campaign."
+msgstr "Selecione uma campanha para ver seus dados detalhados de rastreamento. Estes relatórios mostram aberturas e cliques para emails enviados em cada campanha."
+
+msgid "Status"
+msgstr "Status"
+
+msgid "Recipients"
+msgstr "Destinatários"
+
+msgid "Opens"
+msgstr "Aberturas"
+
+msgid "Clicks"
+msgstr "Cliques"
+
+msgid "No campaigns available for tracking."
+msgstr "Nenhuma campanha disponível para rastreamento."
+
 # Common actions
 #~ msgid "Edit"
 #~ msgstr "Editar"
