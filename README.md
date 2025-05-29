@@ -199,6 +199,38 @@ When sending large campaigns (1,000+ recipients):
 3. **Scheduling**: Send large campaigns during off-peak hours to minimize impact on other operations
 4. **Testing**: Always test with a small subset of recipients before launching the full campaign
 
+## Deployment on Render
+
+The application is optimized for deployment on Render's free tier with the following considerations:
+
+### WSGI Configuration
+- The application uses a proper WSGI entry point (`wsgi.py`) that creates the Flask application instance
+- The `render.yaml` file is configured to use `gunicorn wsgi:application` instead of `app:app`
+- This ensures the application is properly initialized in the production environment
+
+### Synchronous Processing
+- Email campaigns are processed synchronously (without background workers)
+- This avoids issues with Render's free tier, which doesn't maintain long-running background processes
+- The scheduler is designed to work within a Flask application context during web requests
+
+### Session Management
+- A dedicated SessionManager class prevents "not bound to a Session" errors during campaign processing
+- The system works with IDs first, then fetches fresh objects only when needed
+- Proper session cleanup between batches prevents memory leaks
+- This approach is critical for large campaigns running on limited resources
+
+### Rate Limiting
+- Token bucket rate limiter prevents overwhelming the server during large campaigns
+- Prioritizes critical notifications (bounces, complaints) while limiting less important ones
+- Processes only 10 notifications per second to prevent 502 Bad Gateway errors
+- Returns 200 OK for rate-limited requests to prevent AWS retries
+
+### Worker Configuration
+- Gunicorn is configured with optimized settings for the Render free tier
+- Limited number of workers (2) with threading enabled
+- Increased timeout (120 seconds) for handling longer operations
+- Worker recycling after handling a certain number of requests to prevent memory leaks
+
 ### Server Configuration
 
 The application uses optimized Gunicorn settings for handling large workloads:
