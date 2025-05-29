@@ -1,11 +1,11 @@
 {% extends 'base.html' %}
 
-{% block title %}Bulk Email Dashboard{% endblock %}
+{% block title %}{{ _('Bulk Email Dashboard') }}{% endblock %}
 
 {% block content %}
 <div class="container-fluid">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2><i class="bi bi-speedometer2 me-2"></i>Dashboard</h2>
+        <h2><i class="bi bi-speedometer2 me-2"></i>{{ _('Dashboard') }}</h2>
         <a href="{{ url_for('create_campaign') }}" class="btn btn-primary">
             <i class="bi bi-plus-circle me-2"></i>New Campaign
         </a>
@@ -15,7 +15,7 @@
         <div class="col-md-3">
             <div class="card text-white bg-primary mb-3">
                 <div class="card-body">
-                    <h5 class="card-title">Total Campaigns</h5>
+                    <h5 class="card-title">{{ _('Total Campaigns') }}</h5>
                     <h2 class="card-text">{{ campaigns|length }}</h2>
                 </div>
             </div>
@@ -23,7 +23,7 @@
         <div class="col-md-3">
             <div class="card text-white bg-success mb-3">
                 <div class="card-body">
-                    <h5 class="card-title">Completed</h5>
+                    <h5 class="card-title">{{ _('Completed') }}</h5>
                     <h2 class="card-text">{{ campaigns|selectattr('status', 'equalto', 'completed')|list|length }}</h2>
                 </div>
             </div>
@@ -31,7 +31,7 @@
         <div class="col-md-3">
             <div class="card text-white bg-warning mb-3">
                 <div class="card-body">
-                    <h5 class="card-title">Pending</h5>
+                    <h5 class="card-title">{{ _('Pending') }}</h5>
                     <h2 class="card-text">{{ campaigns|selectattr('status', 'equalto', 'pending')|list|length }}</h2>
                 </div>
             </div>
@@ -39,7 +39,7 @@
         <div class="col-md-3">
             <div class="card text-white bg-danger mb-3">
                 <div class="card-body">
-                    <h5 class="card-title">Failed</h5>
+                    <h5 class="card-title">{{ _('Failed') }}</h5>
                     <h2 class="card-text">{{ campaigns|selectattr('status', 'equalto', 'failed')|list|length }}</h2>
                 </div>
             </div>
@@ -50,17 +50,17 @@
         <div class="col-md-8">
             <div class="card">
                 <div class="card-header">
-                    <h5 class="card-title mb-0">Recent Campaigns</h5>
+                    <h5 class="card-title mb-0">{{ _('Recent Campaigns') }}</h5>
                 </div>
                 <div class="card-body">
                     <div class="table-responsive">
                         <table id="campaignTable" class="table table-hover">
                             <thead>
                                 <tr>
-                                    <th>Name</th>
-                                    <th>Scheduled Time</th>
-                                    <th>Status</th>
-                                    <th>Actions</th>
+                                    <th>{{ _('Name') }}</th>
+                                    <th>{{ _('Scheduled Time') }}</th>
+                                    <th>{{ _('Status') }}</th>
+                                    <th>{{ _('Actions') }}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -86,7 +86,7 @@
                                 </tr>
                                 {% else %}
                                 <tr>
-                                    <td colspan="4" class="text-center">No campaigns yet. <a href="{{ url_for('create_campaign') }}">Create one now</a>.</td>
+                                    <td colspan="4" class="text-center">{{ _('No campaigns yet.') }} <a href="{{ url_for('create_campaign') }}">{{ _('Create one now') }}</a>.</td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
@@ -94,7 +94,7 @@
                     </div>
                     {% if campaigns|length > 5 %}
                     <div class="text-center mt-3">
-                        <a href="{{ url_for('campaigns') }}" class="btn btn-outline-primary">View All Campaigns</a>
+                        <a href="{{ url_for('campaigns') }}" class="btn btn-outline-primary">{{ _('View All Campaigns') }}</a>
                     </div>
                     {% endif %}
                 </div>

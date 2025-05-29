@@ -575,26 +575,54 @@ msgstr ""
 #~ msgstr "Carregar Destinatários"
 
 # Statistics and metrics
-#~ msgid "Total Recipients"
-#~ msgstr "Total de Destinatários"
+msgid "Total Recipients"
+msgstr "Total de Destinatários"
 
-#~ msgid "Emails Sent"
-#~ msgstr "Emails Enviados"
+msgid "Emails Sent"
+msgstr "Emails Enviados"
 
-#~ msgid "Delivery Rate"
-#~ msgstr "Taxa de Entrega"
+msgid "Delivery Rate"
+msgstr "Taxa de Entrega"
 
-#~ msgid "Open Rate"
-#~ msgstr "Taxa de Abertura"
+msgid "Open Rate"
+msgstr "Taxa de Abertura"
 
-#~ msgid "Click Rate"
-#~ msgstr "Taxa de Clique"
+msgid "Click Rate"
+msgstr "Taxa de Clique"
 
-#~ msgid "Bounce Rate"
-#~ msgstr "Taxa de Rejeição"
+msgid "Bounce Rate"
+msgstr "Taxa de Rejeição"
 
-#~ msgid "Complaint Rate"
-#~ msgstr "Taxa de Reclamações"
+msgid "Complaint Rate"
+msgstr "Taxa de Reclamações"
+
+# Dashboard
+msgid "Bulk Email Dashboard"
+msgstr "Painel de Email em Massa"
+
+msgid "Total Campaigns"
+msgstr "Total de Campanhas"
+
+msgid "Recent Campaigns"
+msgstr "Campanhas Recentes"
+
+msgid "Name"
+msgstr "Nome"
+
+msgid "Scheduled Time"
+msgstr "Horário Agendado"
+
+msgid "Actions"
+msgstr "Ações"
+
+msgid "No campaigns yet."
+msgstr "Nenhuma campanha ainda."
+
+msgid "Create one now"
+msgstr "Criar uma agora"
+
+msgid "View All Campaigns"
+msgstr "Ver Todas as Campanhas"
 
 # Common actions
 #~ msgid "Edit"
