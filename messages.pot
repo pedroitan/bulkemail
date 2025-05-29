@@ -1,50 +1,49 @@
-# Brazilian Portuguese translations for Bulk Email Scheduler.
-# Copyright (C) 2025 Bulk Email Scheduler
-# This file is distributed under the same license as the Bulk Email
-# Scheduler project.
+# Translations template for PROJECT.
+# Copyright (C) 2025 ORGANIZATION
+# This file is distributed under the same license as the PROJECT project.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2025.
+#
+#, fuzzy
 msgid ""
 msgstr ""
-"Project-Id-Version: Bulk Email Scheduler 1.0\n"
-"Report-Msgid-Bugs-To: \n"
+"Project-Id-Version: PROJECT VERSION\n"
+"Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
 "POT-Creation-Date: 2025-05-29 19:44-0300\n"
-"PO-Revision-Date: 2025-05-29 19:30-0300\n"
-"Last-Translator: \n"
-"Language: pt_BR\n"
-"Language-Team: Portuguese (Brazil)\n"
-"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.17.0\n"
 
-# Main navigation
 #: templates/base.html:6 templates/base.html:82
 msgid "Bulk Email"
-msgstr "Email em Massa"
+msgstr ""
 
 #: templates/base.html:90 templates/base.html:119
 msgid "Dashboard"
-msgstr "Painel"
+msgstr ""
 
 #: templates/base.html:93 templates/base.html:122
 msgid "Campaigns"
-msgstr "Campanhas"
+msgstr ""
 
 #: templates/base.html:125
 msgid "New Campaign"
-msgstr "Nova Campanha"
+msgstr ""
 
 #: templates/base.html:128
 msgid "Bounce Report"
-msgstr "Relatório de Rejeições"
+msgstr ""
 
 #: templates/base.html:131
 msgid "Verify Recipients"
-msgstr "Verificar Destinatários"
+msgstr ""
 
 #: templates/base.html:134
 msgid "Email Tracking"
-msgstr "Rastreamento de Emails"
+msgstr ""
 
 #: venv/lib/python3.13/site-packages/click/_termui_impl.py:556
 #, python-brace-format
@@ -526,92 +525,4 @@ msgstr ""
 #: venv/lib/python3.13/site-packages/wtforms/fields/numeric.py:197
 msgid "Not a valid float value."
 msgstr ""
-
-# Campaign statuses
-#~ msgid "Draft"
-#~ msgstr "Rascunho"
-
-#~ msgid "Scheduled"
-#~ msgstr "Agendada"
-
-#~ msgid "Sending"
-#~ msgstr "Enviando"
-
-#~ msgid "Completed"
-#~ msgstr "Concluída"
-
-#~ msgid "Paused"
-#~ msgstr "Pausada"
-
-#~ msgid "Cancelled"
-#~ msgstr "Cancelada"
-
-# Form labels and buttons
-#~ msgid "Campaign Name"
-#~ msgstr "Nome da Campanha"
-
-#~ msgid "Email Subject"
-#~ msgstr "Assunto do Email"
-
-#~ msgid "Email Content"
-#~ msgstr "Conteúdo do Email"
-
-#~ msgid "Schedule Date"
-#~ msgstr "Data de Agendamento"
-
-#~ msgid "Save Campaign"
-#~ msgstr "Salvar Campanha"
-
-#~ msgid "Delete Campaign"
-#~ msgstr "Excluir Campanha"
-
-#~ msgid "Start Sending"
-#~ msgstr "Iniciar Envio"
-
-#~ msgid "Send Test Email"
-#~ msgstr "Enviar Email de Teste"
-
-#~ msgid "Upload Recipients"
-#~ msgstr "Carregar Destinatários"
-
-# Statistics and metrics
-#~ msgid "Total Recipients"
-#~ msgstr "Total de Destinatários"
-
-#~ msgid "Emails Sent"
-#~ msgstr "Emails Enviados"
-
-#~ msgid "Delivery Rate"
-#~ msgstr "Taxa de Entrega"
-
-#~ msgid "Open Rate"
-#~ msgstr "Taxa de Abertura"
-
-#~ msgid "Click Rate"
-#~ msgstr "Taxa de Clique"
-
-#~ msgid "Bounce Rate"
-#~ msgstr "Taxa de Rejeição"
-
-#~ msgid "Complaint Rate"
-#~ msgstr "Taxa de Reclamações"
-
-# Common actions
-#~ msgid "Edit"
-#~ msgstr "Editar"
-
-#~ msgid "Delete"
-#~ msgstr "Excluir"
-
-#~ msgid "Cancel"
-#~ msgstr "Cancelar"
-
-#~ msgid "Submit"
-#~ msgstr "Enviar"
-
-#~ msgid "Back"
-#~ msgstr "Voltar"
-
-#~ msgid "Next"
-#~ msgstr "Próximo"
 

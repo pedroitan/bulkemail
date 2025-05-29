@@ -35,6 +35,7 @@ from email_verification import EmailVerifier
 from sqs_handler import SQSHandler
 from recipient_lists import recipient_lists_bp
 from aws_usage import aws_usage_blueprint, track_email_sent, track_sns_notification
+from translations import configure_babel
 
 # Load environment variables from .env file immediately
 load_dotenv()
@@ -194,8 +195,12 @@ def create_app(config_object='config.Config'):
     # Initialize database
     db.init_app(app)
     
-    # Register AWS usage dashboard blueprint
+    # Register blueprints
+    app.register_blueprint(recipient_lists_bp)
     app.register_blueprint(aws_usage_blueprint)
+    
+    # Configure internationalization
+    configure_babel(app)
     
     # Configure logging
     logging.basicConfig(
