@@ -7,7 +7,7 @@ while also allowing manual language selection that's saved in the user's session
 """
 
 from flask import request, session, g, redirect
-from flask_babel import Babel
+from flask_babel import Babel, gettext as _
 
 # Supported languages
 LANGUAGES = {
@@ -50,6 +50,9 @@ def get_locale():
 def configure_babel(app):
     """Configure Flask-Babel with the Flask application."""
     babel.init_app(app, locale_selector=get_locale)
+    
+    # Add the gettext and ngettext functions to the template context
+    app.jinja_env.globals['_'] = _
     
     # Make languages available to all templates
     @app.context_processor
