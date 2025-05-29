@@ -1,0 +1,126 @@
+# Brazilian Portuguese translations for Bulk Email Scheduler.
+# Copyright (C) 2025 Bulk Email Scheduler
+# This file is distributed under the same license as the Bulk Email Scheduler project.
+msgid ""
+msgstr ""
+"Project-Id-Version: Bulk Email Scheduler 1.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2025-05-29 19:30-0300\n"
+"PO-Revision-Date: 2025-05-29 19:30-0300\n"
+"Last-Translator: \n"
+"Language-Team: Portuguese (Brazil)\n"
+"Language: pt_BR\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+
+# Main navigation
+msgid "Bulk Email"
+msgstr "Email em Massa"
+
+msgid "Dashboard"
+msgstr "Painel"
+
+msgid "Campaigns"
+msgstr "Campanhas"
+
+msgid "New Campaign"
+msgstr "Nova Campanha"
+
+msgid "Bounce Report"
+msgstr "Relatório de Rejeições"
+
+msgid "Verify Recipients"
+msgstr "Verificar Destinatários"
+
+msgid "Email Tracking"
+msgstr "Rastreamento de Emails"
+
+# Campaign statuses
+msgid "Draft"
+msgstr "Rascunho"
+
+msgid "Scheduled"
+msgstr "Agendada"
+
+msgid "Sending"
+msgstr "Enviando"
+
+msgid "Completed"
+msgstr "Concluída"
+
+msgid "Paused"
+msgstr "Pausada"
+
+msgid "Cancelled"
+msgstr "Cancelada"
+
+# Form labels and buttons
+msgid "Campaign Name"
+msgstr "Nome da Campanha"
+
+msgid "Email Subject"
+msgstr "Assunto do Email"
+
+msgid "Email Content"
+msgstr "Conteúdo do Email"
+
+msgid "Schedule Date"
+msgstr "Data de Agendamento"
+
+msgid "Save Campaign"
+msgstr "Salvar Campanha"
+
+msgid "Delete Campaign"
+msgstr "Excluir Campanha"
+
+msgid "Start Sending"
+msgstr "Iniciar Envio"
+
+msgid "Send Test Email"
+msgstr "Enviar Email de Teste"
+
+msgid "Upload Recipients"
+msgstr "Carregar Destinatários"
+
+# Statistics and metrics
+msgid "Total Recipients"
+msgstr "Total de Destinatários"
+
+msgid "Emails Sent"
+msgstr "Emails Enviados"
+
+msgid "Delivery Rate"
+msgstr "Taxa de Entrega"
+
+msgid "Open Rate"
+msgstr "Taxa de Abertura"
+
+msgid "Click Rate"
+msgstr "Taxa de Clique"
+
+msgid "Bounce Rate"
+msgstr "Taxa de Rejeição"
+
+msgid "Complaint Rate"
+msgstr "Taxa de Reclamações"
+
+# Common actions
+msgid "Edit"
+msgstr "Editar"
+
+msgid "Delete"
+msgstr "Excluir"
+
+msgid "Cancel"
+msgstr "Cancelar"
+
+msgid "Submit"
+msgstr "Enviar"
+
+msgid "Back"
+msgstr "Voltar"
+
+msgid "Next"
+msgstr "Próximo"

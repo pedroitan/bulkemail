@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{ current_language }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Bulk Email{% endblock %}</title>
+    <title>{% block title %}{{ _('Bulk Email') }}{% endblock %}</title>
     
     <!-- Favicon -->
     <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
@@ -79,7 +79,7 @@
     <nav class="navbar navbar-expand-lg navbar-dark bg-primary fixed-top">
         <div class="container-fluid">
             <a class="navbar-brand" href="{{ url_for('index') }}">
-                <i class="bi bi-envelope me-2"></i>Bulk Email
+                <i class="bi bi-envelope me-2"></i>{{ _('Bulk Email') }}
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
@@ -87,10 +87,24 @@
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto">
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('index') }}">Dashboard</a>
+                        <a class="nav-link" href="{{ url_for('index') }}">{{ _('Dashboard') }}</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('campaigns') }}">Campaigns</a>
+                        <a class="nav-link" href="{{ url_for('campaigns') }}">{{ _('Campaigns') }}</a>
+                    </li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="languageDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="bi bi-globe"></i> {{ languages[current_language] }}
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="languageDropdown">
+                            {% for code, name in languages.items() %}
+                            <li>
+                                <a class="dropdown-item {% if current_language == code %}active{% endif %}" href="{{ url_for('set_language', language=code) }}">
+                                    {{ name }}
+                                </a>
+                            </li>
+                            {% endfor %}
+                        </ul>
                     </li>
                 </ul>
             </div>
@@ -102,22 +116,22 @@
             <div class="col-md-2 d-md-block d-none sidebar">
                 <div class="list-group">
                     <a href="{{ url_for('index') }}" class="list-group-item list-group-item-action {% if request.endpoint == 'index' %}active{% endif %}">
-                        <i class="bi bi-speedometer2 me-2"></i> Dashboard
+                        <i class="bi bi-speedometer2 me-2"></i> {{ _('Dashboard') }}
                     </a>
                     <a href="{{ url_for('campaigns') }}" class="list-group-item list-group-item-action {% if request.endpoint == 'campaigns' %}active{% endif %}">
-                        <i class="bi bi-envelope me-2"></i> Campaigns
+                        <i class="bi bi-envelope me-2"></i> {{ _('Campaigns') }}
                     </a>
                     <a href="{{ url_for('create_campaign') }}" class="list-group-item list-group-item-action {% if request.endpoint == 'create_campaign' %}active{% endif %}">
-                        <i class="bi bi-plus-circle me-2"></i> New Campaign
+                        <i class="bi bi-plus-circle me-2"></i> {{ _('New Campaign') }}
                     </a>
                     <a href="{{ url_for('bounce_report') }}" class="list-group-item list-group-item-action {% if request.endpoint == 'bounce_report' %}active{% endif %}">
-                        <i class="bi bi-exclamation-triangle me-2"></i> Bounce Report
+                        <i class="bi bi-exclamation-triangle me-2"></i> {{ _('Bounce Report') }}
                     </a>
                     <a href="{{ url_for('verify_recipients') }}" class="list-group-item list-group-item-action {% if request.endpoint == 'verify_recipients' %}active{% endif %}">
-                        <i class="bi bi-check-circle me-2"></i> Verify Recipients
+                        <i class="bi bi-check-circle me-2"></i> {{ _('Verify Recipients') }}
                     </a>
                     <a href="{{ url_for('tracking_campaigns') }}" class="list-group-item list-group-item-action {% if request.endpoint == 'tracking_campaigns' %}active{% endif %}">
-                        <i class="bi bi-graph-up me-2"></i> Email Tracking
+                        <i class="bi bi-graph-up me-2"></i> {{ _('Email Tracking') }}
                     </a>
                 </div>
             </div>
