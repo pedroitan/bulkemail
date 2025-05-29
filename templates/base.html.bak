@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Bulk Email{% endblock %}</title>
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}">
+    
+    <!-- Stylesheets -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+    <style>
+        .sidebar {
+            height: 100vh;
+            position: fixed;
+            top: 0;
+            left: 0;
+            padding-top: 3.5rem;
+            background-color: #f8f9fa;
+            border-right: 1px solid #dee2e6;
+        }
+        .main-content {
+            margin-left: 230px;
+            padding: 2rem;
+            padding-top: 4.5rem;
+        }
+        .navbar {
+            z-index: 1030;
+        }
+        @media (max-width: 768px) {
+            .sidebar {
+                display: none;
+            }
+            .main-content {
+                margin-left: 0;
+            }
+        }
+        .card {
+            box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+            margin-bottom: 1.5rem;
+        }
+        .campaign-status {
+            display: inline-block;
+            padding: 0.25em 0.6em;
+            font-size: 75%;
+            font-weight: 700;
+            text-align: center;
+            white-space: nowrap;
+            vertical-align: baseline;
+            border-radius: 0.25rem;
+        }
+        .status-pending {
+            background-color: #ffc107;
+            color: #212529;
+        }
+        .status-in_progress {
+            background-color: #17a2b8;
+            color: white;
+        }
+        .status-completed {
+            background-color: #28a745;
+            color: white;
+        }
+        .status-failed {
+            background-color: #dc3545;
+            color: white;
+        }
+        .status-partially_completed {
+            background-color: #fd7e14;
+            color: white;
+        }
+    </style>
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary fixed-top">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="{{ url_for('index') }}">
+                <i class="bi bi-envelope me-2"></i>Bulk Email
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('index') }}">Dashboard</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('campaigns') }}">Campaigns</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-md-2 d-md-block d-none sidebar">
+                <div class="list-group">
+                    <a href="{{ url_for('index') }}" class="list-group-item list-group-item-action {% if request.endpoint == 'index' %}active{% endif %}">
+                        <i class="bi bi-speedometer2 me-2"></i> Dashboard
+                    </a>
+                    <a href="{{ url_for('campaigns') }}" class="list-group-item list-group-item-action {% if request.endpoint == 'campaigns' %}active{% endif %}">
+                        <i class="bi bi-envelope me-2"></i> Campaigns
+                    </a>
+                    <a href="{{ url_for('create_campaign') }}" class="list-group-item list-group-item-action {% if request.endpoint == 'create_campaign' %}active{% endif %}">
+                        <i class="bi bi-plus-circle me-2"></i> New Campaign
+                    </a>
+                    <a href="{{ url_for('bounce_report') }}" class="list-group-item list-group-item-action {% if request.endpoint == 'bounce_report' %}active{% endif %}">
+                        <i class="bi bi-exclamation-triangle me-2"></i> Bounce Report
+                    </a>
+                    <a href="{{ url_for('verify_recipients') }}" class="list-group-item list-group-item-action {% if request.endpoint == 'verify_recipients' %}active{% endif %}">
+                        <i class="bi bi-check-circle me-2"></i> Verify Recipients
+                    </a>
+                    <a href="{{ url_for('tracking_campaigns') }}" class="list-group-item list-group-item-action {% if request.endpoint == 'tracking_campaigns' %}active{% endif %}">
+                        <i class="bi bi-graph-up me-2"></i> Email Tracking
+                    </a>
+                </div>
+            </div>
+            <main class="col-md-10 ms-sm-auto main-content">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        {% for category, message in messages %}
+                            <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                                {{ message }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                {% endwith %}
+                
+                {% block content %}{% endblock %}
+            </main>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

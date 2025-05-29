@@ -21,8 +21,6 @@ import logging
 import threading
 import re
 from datetime import datetime, timedelta
-from sqlalchemy import text
-from sqlalchemy import inspect, text
 from models import db, EmailCampaign, EmailRecipient
 from forms import CampaignForm, UploadRecipientsForm
 from email_service import SESEmailService
@@ -34,8 +32,8 @@ from email_tracking import init_tracking
 from email_verification import EmailVerifier
 from sqs_handler import SQSHandler
 from recipient_lists import recipient_lists_bp
-from aws_usage import aws_usage_blueprint, track_email_sent, track_sns_notification
 
+from aws_usage import aws_usage_blueprint, track_email_sent, track_sns_notification
 # Load environment variables from .env file immediately
 load_dotenv()
 
@@ -194,9 +192,6 @@ def create_app(config_object='config.Config'):
     # Initialize database
     db.init_app(app)
     
-    # Register AWS usage dashboard blueprint
-    app.register_blueprint(aws_usage_blueprint)
-    
     # Configure logging
     logging.basicConfig(
         level=logging.INFO,
@@ -265,70 +260,8 @@ def create_app(config_object='config.Config'):
     
     # Register the recipient_lists blueprint
     app.register_blueprint(recipient_lists_bp)
-    
-    # Add the schema fix route
-    @app.route('/admin/fix-schema')
-    def fix_database_schema():
-        """Add missing columns to the email_campaign table"""
-        try:
-            # Connect to the database
-            with db.engine.connect() as conn:
-                # Check which columns already exist
-                columns_result = conn.execute(text(
-                    "SELECT column_name FROM information_schema.columns "
-                    "WHERE table_name = 'email_campaign'"
-                ))
-                existing_columns = [row[0] for row in columns_result]
-                
-                # Track which columns we've added
-                added_columns = []
-                
-                # Add missing columns if they don't exist
-                if 'total_recipients' not in existing_columns:
-                    conn.execute(text("ALTER TABLE email_campaign ADD COLUMN total_recipients INTEGER DEFAULT 0"))
-                    added_columns.append('total_recipients')
-                
-                if 'last_segment_position' not in existing_columns:
-                    conn.execute(text("ALTER TABLE email_campaign ADD COLUMN last_segment_position INTEGER DEFAULT 0"))
-                    added_columns.append('last_segment_position')
-                
-                if 'next_segment_time' not in existing_columns:
-                    conn.execute(text("ALTER TABLE email_campaign ADD COLUMN next_segment_time TIMESTAMP"))
-                    added_columns.append('next_segment_time')
-                
-                # Commit the transaction
-                trans = conn.begin()
-                trans.commit()
-                
-            return f"""
-            <html>
-                <head><title>Schema Update Complete</title></head>
-                <body>
-                    <h1>Database Schema Update</h1>
-                    <p>The following columns were added to the email_campaign table:</p>
-                    <ul>
-                        {''.join(f'<li>{col}</li>' for col in added_columns)}
-                    </ul>
-                    <p>If no columns are listed, they may already exist in the table.</p>
-                    <p><a href="/">Return to homepage</a></p>
-                </body>
-            </html>
-            """
-        except Exception as e:
-            return f"""
-            <html>
-                <head><title>Schema Update Error</title></head>
-                <body>
-                    <h1>Error Updating Schema</h1>
-                    <p>An error occurred while updating the database schema:</p>
-                    <pre>{str(e)}</pre>
-                    <p><a href="/">Return to homepage</a></p>
-                </body>
-            </html>
-            """
 
     # Routes
-    
     @app.route('/')
     def index():
         # Dashboard overview
@@ -344,13 +277,13 @@ def create_app(config_object='config.Config'):
         # Get recent campaigns for dashboard
         recent_campaigns = campaigns[:5] if campaigns else []
         return render_template('index.html', campaigns=recent_campaigns, stats=stats)
-
+    
     @app.route('/campaigns')
     def campaigns():
         # List all campaigns
         campaigns = EmailCampaign.query.order_by(EmailCampaign.created_at.desc()).all()
         return render_template('campaigns.html', campaigns=campaigns)
-
+    
     @app.route('/campaigns/create', methods=['GET', 'POST'])
     def create_campaign():
         form = CampaignForm()
@@ -360,9 +293,9 @@ def create_app(config_object='config.Config'):
         if domains:
             form.sender_domain.choices = [(domain, domain) for domain in domains if domain]
             
-        # Set vendo147.com as the default domain if it exists in choices
-        if not form.is_submitted() and 'vendo147.com' in [choice[0] for choice in form.sender_domain.choices]:
-            form.sender_domain.data = 'vendo147.com'
+            # Set vendo147.com as the default domain if it exists in choices
+            if not form.is_submitted() and 'vendo147.com' in [choice[0] for choice in form.sender_domain.choices]:
+                form.sender_domain.data = 'vendo147.com'
         
         # Pre-populate sender email field with username part of the default sender email
         default_email = app.config.get('SENDER_EMAIL')
@@ -370,7 +303,7 @@ def create_app(config_object='config.Config'):
             username, domain = default_email.split('@', 1)
             if not form.is_submitted():
                 form.sender_email.data = username
-        
+            
             # Select the domain in the dropdown if it exists in choices
             if domain in [choice[0] for choice in form.sender_domain.choices]:
                 form.sender_domain.data = domain
@@ -442,12 +375,12 @@ def create_app(config_object='config.Config'):
             elif not campaign.scheduled_time:
                 # Reset status to draft even if it was previously completed
                 campaign.status = 'draft'
-        
+            
             db.session.commit()
             flash('Campaign updated successfully', 'success')
-        
+            
             return redirect(url_for('campaign_detail', campaign_id=campaign.id))
-    
+        
         return render_template('edit_campaign.html', form=form, campaign=campaign)
     
     @app.route('/campaigns/<int:campaign_id>/delete', methods=['POST', 'DELETE'])
@@ -468,7 +401,7 @@ def create_app(config_object='config.Config'):
         except Exception as e:
             db.session.rollback()
             flash(f'Error deleting campaign: {str(e)}', 'danger')
-    
+        
         # Always redirect to campaigns list
         return redirect(url_for('campaigns'))
     
@@ -923,21 +856,10 @@ def create_app(config_object='config.Config'):
     
     @app.route('/api/sns/ses-notification', methods=['POST'])
     def sns_notification_handler():
-        # SNS notifications are now permanently disabled to prevent application crashes
-        app.logger.warning("⚠️ SNS notifications are permanently disabled. Returning OK to prevent retries.")
-        app.logger.info("This helps prevent application crashes after sending large numbers of emails.")
-        return jsonify({
-            'success': True, 
-            'message': 'SNS notifications are permanently disabled'
-        }), 200
-            
-        # Track SNS notification for AWS usage metrics
-        try:
-            track_sns_notification()
-        except Exception as e:
-            app.logger.error(f"Error tracking SNS notification: {str(e)}")
-            
-        # Add detailed debugging for SES-SNS-SQS notification flow
+                # Track SNS notification for AWS usage metrics
+        track_sns_notification()
+
+# Add detailed debugging for SES-SNS-SQS notification flow
         app.logger.debug("==== RECEIVED SNS NOTIFICATION ====")
         app.logger.debug(f"Headers: {request.headers}")
         
@@ -2293,44 +2215,6 @@ def create_app(config_object='config.Config'):
     def direct_test():
         """Direct testing page with minimal dependencies"""
         return render_template('direct_test.html')
-        
-    @app.route('/admin/update-schema')
-    def admin_update_schema():
-        """Temporary admin route to update the database schema with missing columns"""
-        try:
-            # Manually run SQL to add the missing columns
-            with db.engine.connect() as connection:
-                # Check if columns exist
-                inspector = inspect(db.engine)
-                existing_columns = [column['name'] for column in inspector.get_columns('email_campaign')]
-                
-                # Add missing columns if needed
-                messages = []
-                
-                if 'total_recipients' not in existing_columns:
-                    connection.execute(text("ALTER TABLE email_campaign ADD COLUMN total_recipients INTEGER DEFAULT 0"))
-                    messages.append("Added total_recipients column")
-                    
-                if 'last_segment_position' not in existing_columns:
-                    connection.execute(text("ALTER TABLE email_campaign ADD COLUMN last_segment_position INTEGER DEFAULT 0"))
-                    messages.append("Added last_segment_position column")
-                    
-                if 'next_segment_time' not in existing_columns:
-                    connection.execute(text("ALTER TABLE email_campaign ADD COLUMN next_segment_time TIMESTAMP"))
-                    messages.append("Added next_segment_time column")
-                
-                if not messages:
-                    messages.append("All required columns already exist")
-                
-            # Return a simple HTML response
-            result = "<h1>Database Schema Update</h1>\n<ul>\n"
-            for message in messages:
-                result += f"<li>{message}</li>\n"
-            result += "</ul>\n<p><a href='/'>Return to home</a></p>"
-            
-            return result
-        except Exception as e:
-            return f"<h1>Error</h1><p>An error occurred: {str(e)}</p>"
 
     @app.route('/campaigns/<int:campaign_id>/start-form', methods=['POST'])
     def start_campaign_form(campaign_id):
@@ -2595,5 +2479,3 @@ with app.app_context():
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
-
-app = create_app()  # This creates the Flask instance for Gunicorn

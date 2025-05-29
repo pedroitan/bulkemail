@@ -84,9 +84,10 @@ def init_db(max_retries=5, retry_delay=3):
     # Get application instance
     app = get_app()
     
-    # Check if we're using PostgreSQL
+    # Check database type
     db_url = os.environ.get('DATABASE_URL', '')
     is_postgres = db_url.startswith('postgresql')
+    is_sqlite = db_url.startswith('sqlite')
     
     if is_postgres:
         logging.info("PostgreSQL detected, applying optimized initialization process...")
@@ -98,6 +99,25 @@ def init_db(max_retries=5, retry_delay=3):
             logging.info(f"Connecting to PostgreSQL at host: {host}")
         except Exception:
             logging.info("Connecting to PostgreSQL (couldn't parse host)")
+    elif is_sqlite:
+        logging.info("SQLite detected, ensuring directory exists...")
+        
+        # Extract path from SQLite URL
+        try:
+            parsed_url = urlparse(db_url)
+            db_path = parsed_url.path.lstrip('/')
+            db_dir = os.path.dirname(db_path)
+            
+            # Create directory if it doesn't exist
+            if db_dir and not os.path.exists(db_dir):
+                os.makedirs(db_dir, exist_ok=True)
+                logging.info(f"Created directory for SQLite database: {db_dir}")
+                
+            logging.info(f"Using SQLite database at: {db_path}")
+        except Exception as e:
+            logging.warning(f"Could not parse SQLite path: {e}")
+    else:
+        logging.info(f"Using database URL: {db_url}")
     
     retry_count = 0
     
@@ -107,15 +127,53 @@ def init_db(max_retries=5, retry_delay=3):
             with app.app_context():
                 logging.info(f"Attempt {retry_count + 1}/{max_retries}: Creating database tables...")
                 
-                # First test the connection
-                if is_postgres:
-                    logging.info("Testing database connection...")
-                    try:
-                        db.engine.connect().close()
-                        logging.info("Database connection successful.")
-                    except Exception as conn_error:
-                        logging.error(f"Database connection failed: {conn_error}")
-                        raise conn_error
+                # First test the connection with enhanced error handling
+                logging.info("Testing database connection...")
+                try:
+                    with db.engine.connect() as connection:
+                        connection.close()
+                    logging.info("Database connection successful.")
+                except Exception as conn_error:
+                    logging.error(f"Database connection failed: {type(conn_error).__name__}: {conn_error}")
+                    
+                    # Log detailed connection info for debugging
+                    if is_postgres:
+                        try:
+                            parsed = urlparse(db_url)
+                            logging.error(f"PostgreSQL Connection Details:")
+                            logging.error(f"- Host: {parsed.hostname}")
+                            logging.error(f"- Port: {parsed.port}")
+                            logging.error(f"- Database: {parsed.path[1:]}")
+                        except Exception as parse_error:
+                            logging.error(f"Could not parse database URL: {parse_error}")
+                    
+                    # If PostgreSQL connection fails, try falling back to SQLite
+                    if is_postgres and not is_sqlite:
+                        logging.warning("PostgreSQL connection failed. Attempting to fall back to SQLite...")
+                        sqlite_url = 'sqlite:///instance/app.db'
+                        
+                        # Ensure the directory exists
+                        os.makedirs('instance', exist_ok=True)
+                        
+                        # Update the app configuration
+                        app.config['SQLALCHEMY_DATABASE_URI'] = sqlite_url
+                        db.init_app(app)
+                        
+                        # Try connecting to SQLite
+                        try:
+                            with db.engine.connect() as connection:
+                                connection.close()
+                            logging.info("Successfully connected to fallback SQLite database")
+                            is_postgres = False
+                            is_sqlite = True
+                            
+                            # Update environment variable for other processes
+                            os.environ['DATABASE_URL'] = sqlite_url
+                        except Exception as sqlite_error:
+                            logging.error(f"SQLite fallback also failed: {type(sqlite_error).__name__}: {sqlite_error}")
+                            raise RuntimeError("Could not connect to either PostgreSQL or SQLite database")
+                    else:
+                        raise RuntimeError(f"Database connection failed: {conn_error}")
                 
                 # Create all tables with careful error handling for SQLAlchemy version differences
                 try:

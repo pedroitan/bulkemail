@@ -21,12 +21,20 @@ logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 logger.addHandler(console_handler)
 
+def create_app():
+    """Create and configure the Flask app for use in external scripts"""
+    from app import app as flask_app
+    return flask_app
+
 def process_sqs_queue_job():
     """
     Process SQS messages at a controlled rate compatible with Render's free tier
     
     This function properly handles Flask application context to avoid APScheduler serialization issues
     that occur when passing Flask app objects directly to job functions.
+    
+    Returns:
+        int: Number of SQS messages processed
     """
     # Import Flask and app-specific dependencies inside the function to avoid circular imports
     import sys
@@ -44,6 +52,7 @@ def process_sqs_queue_job():
             
         # Create an application context for this thread
         with app.app_context():
+            processed_count = 0
             try:
                 # Process up to 10 messages per minute
                 sqs_handler = app.get_sqs_handler()
@@ -56,7 +65,7 @@ def process_sqs_queue_job():
                 
                 if not messages:
                     logger.debug("No messages found in SQS queue")
-                    return
+                    return 0
                     
                 app.logger.info(f"Processing {len(messages)} SQS messages from scheduled job")
                 logger.debug(f"Raw messages received from SQS: {json.dumps([{'MessageId': m.get('MessageId'), 'MD5': m.get('MD5OfBody')} for m in messages], indent=2)}")
@@ -103,50 +112,51 @@ def process_sqs_queue_job():
                                 continue
                             notification_type = sns_message.get('notificationType') or sns_message.get('eventType')
                             
-                            # Process the notification based on type
-                            # Instead of directly importing handlers, we'll use our SNS notification endpoint
-                            # which has access to the handler functions
-                            try:
-                                # Create a direct notification to the SNS endpoint
-                                # This simulates SNS sending the notification to our webhook
-                                from flask import url_for
-                                import requests
-                                
-                                # Prepare the message for the endpoint
-                                message_body = json.dumps({
-                                    'Type': 'Notification',
-                                    'Message': json.dumps(sns_message)
-                                })
-                                
-                                # Get the server base URL from the app config or use localhost
-                                # In development, use localhost
-                                server_url = 'http://localhost:5000'
-                                if app.config.get('SERVER_NAME'):
-                                    protocol = 'https' if app.config.get('PREFERRED_URL_SCHEME') == 'https' else 'http'
-                                    server_url = f"{protocol}://{app.config.get('SERVER_NAME')}"
-                                
-                                # Send to the webhook endpoint
-                                endpoint_url = f"{server_url}/api/sns/ses-notification"
-                                app.logger.info(f"Forwarding {notification_type} notification to endpoint: {endpoint_url}")
-                                
-                                # Use the Flask test client instead of making a real HTTP request
-                                with app.test_client() as client:
-                                    response = client.post(
-                                        '/api/sns/ses-notification',
-                                        data=message_body,
-                                        content_type='application/json'
-                                    )
-                                    app.logger.info(f"Notification forwarding response: {response.status_code}")
-                                    if response.status_code == 200:
-                                        app.logger.info(f"Successfully processed {notification_type} notification")
-                                    else:
-                                        app.logger.error(f"Error processing {notification_type} notification: {response.data}")
-                                
-                            except Exception as process_err:
-                                app.logger.error(f"Error processing notification: {str(process_err)}")
-                                app.logger.error("Falling back to direct SQS message processing")
+                            if notification_type:
+                                # Process the notification based on type
+                                # Instead of directly importing handlers, we'll use our SNS notification endpoint
+                                # which has access to the handler functions
+                                try:
+                                    # Create a direct notification to the SNS endpoint
+                                    # This simulates SNS sending the notification to our webhook
+                                    from flask import url_for
+                                    import requests
+                                    
+                                    # Prepare the message for the endpoint
+                                    message_body = json.dumps({
+                                        'Type': 'Notification',
+                                        'Message': json.dumps(sns_message)
+                                    })
+                                    
+                                    # Get the server base URL from the app config or use localhost
+                                    # In development, use localhost
+                                    server_url = 'http://localhost:5000'
+                                    if app.config.get('SERVER_NAME'):
+                                        protocol = 'https' if app.config.get('PREFERRED_URL_SCHEME') == 'https' else 'http'
+                                        server_url = f"{protocol}://{app.config.get('SERVER_NAME')}"
+                                    
+                                    # Send to the webhook endpoint
+                                    endpoint_url = f"{server_url}/api/sns/ses-notification"
+                                    app.logger.info(f"Forwarding {notification_type} notification to endpoint: {endpoint_url}")
+                                    
+                                    # Use the Flask test client instead of making a real HTTP request
+                                    with app.test_client() as client:
+                                        response = client.post(
+                                            '/api/sns/ses-notification',
+                                            data=message_body,
+                                            content_type='application/json'
+                                        )
+                                        app.logger.info(f"Notification forwarding response: {response.status_code}")
+                                        if response.status_code == 200:
+                                            app.logger.info(f"Successfully processed {notification_type} notification")
+                                        else:
+                                            app.logger.error(f"Error processing {notification_type} notification: {response.data}")
+                                    
+                                except Exception as process_err:
+                                    app.logger.error(f"Error processing notification: {str(process_err)}")
+                                    app.logger.error("Falling back to direct SQS message processing")
                             else:
-                                app.logger.warning(f"Unknown notification type: {notification_type}")
+                                app.logger.warning(f"Received notification without a notification type: {sns_message}")
                     
                         # Delete the message after successful processing
                         sqs_handler.delete_message(receipt_handle)
@@ -159,7 +169,10 @@ def process_sqs_queue_job():
                         app.logger.error(f"Error processing SQS message: {str(e)}")
         
                 app.logger.info(f"Successfully processed {processed} SQS messages")
+                return processed
             except Exception as e:
                 app.logger.error(f"Error processing SQS queue: {str(e)}")
+                return 0
     except Exception as e:
         logger.error(f"Error in SQS queue processing job: {str(e)}")
+        return 0

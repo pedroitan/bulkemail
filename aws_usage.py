@@ -215,25 +215,14 @@ def update_local_tracking_from_cloudwatch(aws_metrics):
         # Get today's stats record
         today_stats = AWSUsageStats.get_or_create_today()
         
-        # Only update if the CloudWatch values are higher than our local tracking
-        # This prevents overwriting our tracking with incomplete CloudWatch data
-        if aws_metrics['ses']['sent'] > today_stats.emails_sent_count:
-            today_stats.emails_sent_count = aws_metrics['ses']['sent']
-            
-        if aws_metrics['ses']['delivered'] > today_stats.emails_delivered_count:
-            today_stats.emails_delivered_count = aws_metrics['ses']['delivered']
-            
-        if aws_metrics['ses']['bounced'] > today_stats.emails_bounced_count:
-            today_stats.emails_bounced_count = aws_metrics['ses']['bounced']
-            
-        if aws_metrics['ses']['complained'] > today_stats.emails_complained_count:
-            today_stats.emails_complained_count = aws_metrics['ses']['complained']
-            
-        if aws_metrics['sns']['published'] > today_stats.sns_notifications_count:
-            today_stats.sns_notifications_count = aws_metrics['sns']['published']
-            
-        if aws_metrics['sqs']['received'] > today_stats.sqs_messages_processed_count:
-            today_stats.sqs_messages_processed_count = aws_metrics['sqs']['received']
+        # Update local tracking with the CloudWatch data directly
+        # This ensures our local tracking stays in sync with the actual AWS usage
+        today_stats.emails_sent_count = aws_metrics['ses']['sent']
+        today_stats.emails_delivered_count = aws_metrics['ses']['delivered']
+        today_stats.emails_bounced_count = aws_metrics['ses']['bounced']
+        today_stats.emails_complained_count = aws_metrics['ses']['complained']
+        today_stats.sns_notifications_count = aws_metrics['sns']['published']
+        today_stats.sqs_messages_processed_count = aws_metrics['sqs']['received']
             
         # Save the updates
         from models import db

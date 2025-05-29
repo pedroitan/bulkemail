@@ -32,6 +32,22 @@
                     </span>
                 </div>
                 <div class="card-body">
+                    <!-- Real-time progress tracking for running campaigns -->
+                    {% if campaign.status == 'running' %}
+                    <div class="campaign-progress mb-4">
+                        <h6>Campaign Progress</h6>
+                        <div class="progress mb-2" style="height: 20px;">
+                            <div id="campaign-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" 
+                                 role="progressbar" style="width: 0%;" 
+                                 aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <small id="campaign-sent-count">0 sent</small>
+                            <small id="campaign-eta">Calculating...</small>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
                     <div class="row">
                         <div class="col-md-6">
                             <p><strong>Subject:</strong> {{ campaign.subject }}</p>
@@ -42,7 +58,7 @@
                         </div>
                         <div class="col-md-6">
                             <p><strong>Recipients:</strong> {{ recipients|length }}</p>
-                            <p><strong>Status:</strong> {{ campaign.status|replace('_', ' ')|title }}</p>
+                            <p><strong>Status:</strong> <span id="campaign-status">{{ campaign.status|replace('_', ' ')|title }}</span></p>
                             {% if campaign.started_at %}
                             <p><strong>Started:</strong> {{ campaign.started_at.strftime('%Y-%m-%d %H:%M') }}</p>
                             {% endif %}
@@ -223,6 +239,69 @@
 {% block extra_js %}
 <script>
 $(document).ready(function() {
+    // Campaign progress tracking (for running campaigns)
+    let progressIntervalId;
+    
+    function startProgressTracking() {
+        // If campaign is running, start progress tracking
+        if ("{{ campaign.status }}" === "running") {
+            updateCampaignProgress();
+            // Poll for updates every 3 seconds
+            progressIntervalId = setInterval(updateCampaignProgress, 3000);
+        }
+    }
+    
+    function updateCampaignProgress() {
+        $.ajax({
+            url: "/api/campaigns/{{ campaign.id }}/progress",
+            type: "GET",
+            dataType: "json",
+            success: function(data) {
+                if (data && data.success && data.campaign) {
+                    const campaign = data.campaign;
+                    
+                    // Update progress bar
+                    const progressBar = $("#campaign-progress-bar");
+                    progressBar.css("width", campaign.progress_percentage + "%");
+                    progressBar.attr("aria-valuenow", campaign.progress_percentage);
+                    progressBar.text(campaign.progress_percentage + "%");
+                    
+                    // Update sent count
+                    $("#campaign-sent-count").text(campaign.sent_count + "/" + campaign.total_recipients + " emails sent");
+                    
+                    // Update ETA if available
+                    if (campaign.estimated_time_remaining !== null) {
+                        let etaText = "";
+                        if (campaign.estimated_time_remaining > 60) {
+                            const minutes = Math.floor(campaign.estimated_time_remaining / 60);
+                            etaText = minutes + " min remaining";
+                        } else {
+                            etaText = campaign.estimated_time_remaining + " sec remaining";
+                        }
+                        $("#campaign-eta").text(etaText);
+                    }
+                    
+                    // Update status and stop polling if campaign is no longer running
+                    $("#campaign-status").text(campaign.status.replace("_", " ").replace(/\b\w/g, l => l.toUpperCase()));
+                    
+                    if (campaign.status !== "running") {
+                        clearInterval(progressIntervalId);
+                        // Refresh page to show final status
+                        setTimeout(function() {
+                            location.reload();
+                        }, 2000);
+                    }
+                }
+            },
+            error: function(jqXHR, textStatus, errorThrown) {
+                console.error("Error updating campaign progress:", textStatus, errorThrown);
+            }
+        });
+    }
+    
+    // Start progress tracking if needed
+    startProgressTracking();
+    
     // Auto-refresh functionality for recipients table
     function refreshRecipientsTable() {
         $.ajax({

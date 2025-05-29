@@ -1,0 +1,103 @@
+{% extends 'base.html' %}
+
+{% block title %}Upload Recipients{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1>Upload Recipients for Campaign: {{ campaign.name }}</h1>
+    
+    <div class="row mt-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5>Upload New Recipients</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" enctype="multipart/form-data">
+                        {{ form.hidden_tag() }}
+                        
+                        <div class="mb-3">
+                            {{ form.file.label(class="form-label") }}
+                            {{ form.file(class="form-control") }}
+                            <div class="form-text">Upload a CSV or Excel file with recipient email addresses.</div>
+                            {% if form.file.errors %}
+                                <div class="alert alert-danger">
+                                    {% for error in form.file.errors %}
+                                        {{ error }}
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+                        
+                        {% if form.save_as_list %}
+                        <div class="mb-3 form-check">
+                            {{ form.save_as_list(class="form-check-input") }}
+                            {{ form.save_as_list.label(class="form-check-label") }}
+                            <div class="form-text">Save these recipients as a list for future campaigns.</div>
+                        </div>
+                        
+                        <div class="mb-3" id="list-name-field" style="display: none;">
+                            {{ form.list_name.label(class="form-label") }}
+                            {{ form.list_name(class="form-control") }}
+                            <div class="form-text">A descriptive name for this recipient list.</div>
+                        </div>
+                        {% endif %}
+                        
+                        <button type="submit" class="btn btn-primary">Upload</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Only show this section if recipient_lists is defined and not empty -->
+        {% if recipient_lists is defined and recipient_lists %}
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5>Use Existing Recipient Lists</h5>
+                </div>
+                <div class="card-body">
+                    <p>Choose from your saved recipient lists:</p>
+                    <div class="list-group">
+                        {% for list in recipient_lists %}
+                        <a href="{{ url_for('upload_recipients', campaign_id=campaign.id, list_id=list.id) }}" class="list-group-item list-group-item-action">
+                            <div class="d-flex w-100 justify-content-between">
+                                <h5 class="mb-1">{{ list.name }}</h5>
+                                <small>{{ list.active_recipients }} active recipients</small>
+                            </div>
+                            <p class="mb-1">{{ list.description or 'No description' }}</p>
+                            <small>Created: {{ list.created_at.strftime('%Y-%m-%d') }}</small>
+                        </a>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% if form.save_as_list %}
+<script>
+    // Show/hide list name field based on checkbox
+    document.addEventListener('DOMContentLoaded', function() {
+        const saveAsListCheckbox = document.getElementById('{{ form.save_as_list.id }}');
+        const listNameField = document.getElementById('list-name-field');
+        
+        function toggleListNameField() {
+            if (saveAsListCheckbox.checked) {
+                listNameField.style.display = 'block';
+            } else {
+                listNameField.style.display = 'none';
+            }
+        }
+        
+        // Initial state
+        toggleListNameField();
+        
+        // Add event listener
+        saveAsListCheckbox.addEventListener('change', toggleListNameField);
+    });
+</script>
+{% endif %}
+{% endblock %}
