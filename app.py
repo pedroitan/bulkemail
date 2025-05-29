@@ -271,8 +271,9 @@ def create_app(config_object='config.Config'):
     # Initialize email verifier
     app.email_verifier = EmailVerifier()
     
-    # Register the recipient_lists blueprint
-    app.register_blueprint(recipient_lists_bp)
+    # Register the recipient_lists blueprint if not already registered
+    if 'recipient_lists_bp' not in app.blueprints:
+        app.register_blueprint(recipient_lists_bp)
     
     # Add the schema fix route
     @app.route('/admin/fix-schema')
