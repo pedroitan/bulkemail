@@ -195,9 +195,12 @@ def create_app(config_object='config.Config'):
     # Initialize database
     db.init_app(app)
     
-    # Register blueprints
-    app.register_blueprint(recipient_lists_bp)
-    app.register_blueprint(aws_usage_blueprint)
+    # Register blueprints (check if blueprints are already registered to avoid duplicates)
+    if 'recipient_lists_bp' not in app.blueprints:
+        app.register_blueprint(recipient_lists_bp)
+        
+    if 'aws_usage_blueprint' not in app.blueprints:
+        app.register_blueprint(aws_usage_blueprint)
     
     # Configure internationalization
     configure_babel(app)
