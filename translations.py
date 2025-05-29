@@ -49,7 +49,12 @@ def get_locale():
 
 def configure_babel(app):
     """Configure Flask-Babel with the Flask application."""
-    babel.init_app(app, locale_selector=get_locale)
+    babel.init_app(app)
+    
+    # Use the older style localeselector decorator instead of the locale_selector parameter
+    @babel.localeselector
+    def get_locale_for_babel():
+        return get_locale()
     
     # Add the gettext and ngettext functions to the template context
     app.jinja_env.globals['_'] = _
