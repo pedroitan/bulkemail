@@ -54,17 +54,34 @@ def get_locale():
 def configure_babel(app):
     """Configure Flask-Babel with the Flask application using a compatible approach."""
     # Initialize Babel with the most basic configuration
-    babel.init_app(app)
+    try:
+        # Try newer Flask-Babel API (locale_selector parameter)
+        babel.init_app(app, locale_selector=get_locale)
+    except TypeError:
+        # Fall back to older Flask-Babel API (localeselector decorator)
+        babel.init_app(app)
+        try:
+            @babel.localeselector
+            def get_locale_for_babel():
+                return get_locale()
+        except AttributeError:
+            # If neither approach works, just proceed without locale selection
+            app.logger.warning("Flask-Babel locale selection could not be configured. Using default locale.")
     
-    # Add the locale selector using the decorator (compatible with all versions)
-    @babel.localeselector
-    def get_locale_for_babel():
-        return get_locale()
-    
-    # Explicitly add translation functions to Jinja environment
+    # Explicitly add translation functions to Jinja environment (works for all versions)
     app.jinja_env.globals.update({
         '_': _,
     })
+    
+    # Print the current translations path to help debug
+    import os
+    app.logger.info(f"Using translations from: {os.path.join(os.path.dirname(__file__), 'translations')}")
+    app.logger.info(f"Available languages: {list(LANGUAGES.keys())}")
+    app.logger.info(f"Default language: {DEFAULT_LANGUAGE}")
+    
+    # Language is automatically detected based on browser settings
+    # You can uncomment the line below to force Portuguese for testing
+    # babel.locale_selector_func = lambda: 'pt_BR'
     
     # Make languages available to all templates
     @app.context_processor

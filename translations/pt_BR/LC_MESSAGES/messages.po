@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Bulk Email Scheduler 1.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-05-29 19:44-0300\n"
+"POT-Creation-Date: 2025-05-29 21:21-0300\n"
 "PO-Revision-Date: 2025-05-29 19:30-0300\n"
 "Last-Translator: \n"
 "Language: pt_BR\n"
@@ -22,19 +22,20 @@ msgstr ""
 msgid "Bulk Email"
 msgstr "Email em Massa"
 
-#: templates/base.html:90 templates/base.html:119
+#: templates/base.html:90 templates/base.html:119 templates/index.html:8
 msgid "Dashboard"
 msgstr "Painel"
 
-#: templates/base.html:93 templates/base.html:122
+#: templates/base.html:93 templates/base.html:122 templates/campaigns.html:3
+#: templates/campaigns.html:8
 msgid "Campaigns"
 msgstr "Campanhas"
 
-#: templates/base.html:125
+#: templates/base.html:125 templates/campaigns.html:10
 msgid "New Campaign"
 msgstr "Nova Campanha"
 
-#: templates/base.html:128
+#: templates/base.html:128 templates/bounce_report.html:3
 msgid "Bounce Report"
 msgstr "Relatório de Rejeições"
 
@@ -45,6 +46,306 @@ msgstr "Verificar Destinatários"
 #: templates/base.html:134
 msgid "Email Tracking"
 msgstr "Rastreamento de Emails"
+
+#: templates/bounce_report.html:8
+msgid "Email Bounce Report"
+msgstr "Relatório de Rejeições de Email"
+
+#: templates/bounce_report.html:10 templates/create_campaign.html:22
+#: templates/tracking_campaigns.html:42 templates/verify_recipients.html:41
+msgid "Back to Campaigns"
+msgstr "Voltar para Campanhas"
+
+# Main navigation
+#: templates/bounce_report.html:16
+msgid "Bounced Emails"
+msgstr "Emails Rejeitados"
+
+#: templates/bounce_report.html:24 templates/bounce_report.html:84
+msgid "Campaign"
+msgstr "Campanha"
+
+# Main navigation
+#: templates/bounce_report.html:25 templates/bounce_report.html:85
+msgid "Email"
+msgstr "Email"
+
+#: templates/bounce_report.html:26 templates/bounce_report.html:86
+#: templates/campaigns.html:23 templates/index.html:62
+#: templates/tracking_campaigns.html:25
+msgid "Status"
+msgstr "Status"
+
+#: templates/bounce_report.html:27
+msgid "Bounce Type"
+msgstr "Tipo de Rejeição"
+
+#: templates/bounce_report.html:28
+msgid "Bounce Subtype"
+msgstr "Subtipo de Rejeição"
+
+#: templates/bounce_report.html:29
+msgid "Bounce Time"
+msgstr "Horário da Rejeição"
+
+#: templates/bounce_report.html:30 templates/bounce_report.html:89
+msgid "Message ID"
+msgstr "ID da Mensagem"
+
+#: templates/bounce_report.html:31
+msgid "Diagnostics"
+msgstr "Diagnósticos"
+
+#: templates/bounce_report.html:68
+msgid ""
+"No bounced emails found. This could mean either all emails were delivered"
+" successfully or bounce notifications haven't been received yet."
+msgstr "Nenhum email rejeitado encontrado. Isso pode significar que todos os emails foram entregues com sucesso ou que as notificações de rejeição ainda não foram recebidas."
+
+#: templates/bounce_report.html:76
+msgid "Complaint Emails"
+msgstr "Emails com Reclamações"
+
+#: templates/bounce_report.html:87
+msgid "Complaint Type"
+msgstr "Tipo de Reclamação"
+
+#: templates/bounce_report.html:88
+msgid "Complaint Time"
+msgstr "Horário da Reclamação"
+
+#: templates/bounce_report.html:115
+msgid ""
+"No complaint emails found. This means no recipients have marked your "
+"emails as spam."
+msgstr "Nenhum email com reclamação encontrado. Isso significa que nenhum destinatário marcou seus emails como spam."
+
+#: templates/bounce_report.html:123
+msgid "Delivery Statistics"
+msgstr "Estatísticas de Entrega"
+
+#: templates/bounce_report.html:131
+msgid "Delivered"
+msgstr "Entregues"
+
+#: templates/bounce_report.html:139
+msgid "Bounced"
+msgstr "Rejeitados"
+
+#: templates/bounce_report.html:147
+msgid "Complained"
+msgstr "Reclamações"
+
+# Main navigation
+#: templates/campaigns.html:3
+#, fuzzy
+msgid "Bulk Email Scheduler"
+msgstr "Email em Massa"
+
+#: templates/campaigns.html:20 templates/index.html:60
+msgid "Name"
+msgstr "Nome"
+
+#: templates/campaigns.html:21
+msgid "Subject"
+msgstr "Assunto"
+
+#: templates/campaigns.html:22 templates/index.html:61
+msgid "Scheduled Time"
+msgstr "Horário Agendado"
+
+#: templates/campaigns.html:24
+msgid "Created"
+msgstr "Criado"
+
+#: templates/campaigns.html:25 templates/index.html:63
+msgid "Actions"
+msgstr "Ações"
+
+#: templates/campaigns.html:37 templates/index.html:34
+msgid "Pending"
+msgstr "Pendente"
+
+#: templates/campaigns.html:39
+msgid "In Progress"
+msgstr "Em Progresso"
+
+#: templates/campaigns.html:41 templates/index.html:26
+#, fuzzy
+msgid "Completed"
+msgstr "Taxa de Reclamações"
+
+#: templates/campaigns.html:43 templates/index.html:42
+msgid "Failed"
+msgstr "Falhou"
+
+#: templates/campaigns.html:45
+msgid "Cancelled"
+msgstr "Cancelado"
+
+#: templates/campaigns.html:72
+#, fuzzy
+msgid "Delete Campaign"
+msgstr "Selecionar Campanha"
+
+#: templates/campaigns.html:76
+#, python-format
+msgid ""
+"Are you sure you want to delete the campaign \"%(name)s\"? This action "
+"cannot be undone."
+msgstr ""
+
+#: templates/campaigns.html:79 templates/create_campaign.html:156
+msgid "Cancel"
+msgstr "Cancelar"
+
+#: templates/campaigns.html:81
+#, fuzzy
+msgid "Delete"
+msgstr "Taxa de Entrega"
+
+#: templates/campaigns.html:91 templates/index.html:89
+msgid "No campaigns yet."
+msgstr "Nenhuma campanha ainda."
+
+#: templates/campaigns.html:91 templates/index.html:89
+msgid "Create one now"
+msgstr "Criar uma agora"
+
+#: templates/create_campaign.html:3
+msgid "Bulk Email Create Campaign"
+msgstr "Criar Campanha de Email em Massa"
+
+#: templates/create_campaign.html:20
+msgid "Create New Campaign"
+msgstr "Criar Nova Campanha"
+
+#: templates/create_campaign.html:125
+msgid "Template Variables"
+msgstr "Variáveis do Modelo"
+
+#: templates/create_campaign.html:126
+msgid "Use these placeholders in your email to personalize it for each recipient:"
+msgstr "Use estes marcadores no seu email para personalizá-lo para cada destinatário:"
+
+#: templates/create_campaign.html:128
+msgid "Recipient's name"
+msgstr "Nome do Destinatário"
+
+#: templates/create_campaign.html:129
+msgid "Any column from your CSV/Excel file"
+msgstr "Qualquer coluna do seu arquivo CSV/Excel"
+
+#: templates/create_campaign.html:144
+msgid ""
+"Plain text version of the email (optional, for clients that don't support"
+" HTML)"
+msgstr "Versão em texto simples do email (opcional, para clientes que não suportam HTML)"
+
+#: templates/create_campaign.html:174
+msgid "Compose your email here..."
+msgstr "Componha seu email aqui..."
+
+# Dashboard
+#: templates/index.html:3
+msgid "Bulk Email Dashboard"
+msgstr "Painel de Email em Massa"
+
+#: templates/index.html:18
+msgid "Total Campaigns"
+msgstr "Total de Campanhas"
+
+#: templates/index.html:53
+msgid "Recent Campaigns"
+msgstr "Campanhas Recentes"
+
+#: templates/index.html:97
+msgid "View All Campaigns"
+msgstr "Ver Todas as Campanhas"
+
+# Email Tracking page
+#: templates/tracking_campaigns.html:3
+msgid "Email Tracking - Campaign Reports"
+msgstr "Rastreamento de Email - Relatórios de Campanha"
+
+#: templates/tracking_campaigns.html:8
+msgid "Email Tracking Reports"
+msgstr "Relatórios de Rastreamento de Email"
+
+#: templates/tracking_campaigns.html:12
+msgid ""
+"Select a campaign to view its detailed tracking data. These reports show "
+"opens and clicks for emails sent in each campaign."
+msgstr ""
+"Selecione uma campanha para ver seus dados detalhados de rastreamento. "
+"Estes relatórios mostram aberturas e cliques para emails enviados em cada"
+" campanha."
+
+#: templates/tracking_campaigns.html:27
+msgid "Recipients"
+msgstr "Destinatários"
+
+#: templates/tracking_campaigns.html:28
+msgid "Opens"
+msgstr "Aberturas"
+
+#: templates/tracking_campaigns.html:29
+msgid "Clicks"
+msgstr "Cliques"
+
+#: templates/tracking_campaigns.html:37
+msgid "No campaigns available for tracking."
+msgstr "Nenhuma campanha disponível para rastreamento."
+
+#: templates/tracking_campaigns.html:37 templates/verify_recipients.html:36
+#, fuzzy
+msgid "Create a campaign"
+msgstr "Selecione uma campanha"
+
+#: templates/tracking_campaigns.html:37 templates/verify_recipients.html:36
+msgid "first."
+msgstr "primeiro."
+
+# Verify Recipients page
+#: templates/verify_recipients.html:3 templates/verify_recipients.html:8
+msgid "Verify Email Recipients"
+msgstr "Verificar Destinatários de Email"
+
+#: templates/verify_recipients.html:12
+msgid ""
+"This tool verifies the email addresses in your campaign to reduce bounce "
+"rates. The verification process checks:"
+msgstr ""
+"Esta ferramenta verifica os endereços de email em sua campanha para "
+"reduzir taxas de rejeição. O processo de verificação inclui:"
+
+#: templates/verify_recipients.html:14
+msgid "Email syntax validity"
+msgstr "Validade da sintaxe do email"
+
+#: templates/verify_recipients.html:15
+msgid "Domain existence (DNS lookup)"
+msgstr "Existência do domínio (consulta DNS)"
+
+#: templates/verify_recipients.html:16
+msgid "Basic MX record validation"
+msgstr "Validação básica de registros MX"
+
+#: templates/verify_recipients.html:23
+msgid "Select Campaign"
+msgstr "Selecionar Campanha"
+
+#: templates/verify_recipients.html:25
+msgid "Select a campaign"
+msgstr "Selecione uma campanha"
+
+#: templates/verify_recipients.html:32
+msgid "Start Verification"
+msgstr "Iniciar Verificação"
+
+#: templates/verify_recipients.html:36
+msgid "No campaigns available for verification."
+msgstr "Nenhuma campanha disponível para verificação."
 
 #: venv/lib/python3.13/site-packages/click/_termui_impl.py:556
 #, python-brace-format
@@ -574,115 +875,6 @@ msgstr ""
 #~ msgid "Upload Recipients"
 #~ msgstr "Carregar Destinatários"
 
-# Statistics and metrics
-msgid "Total Recipients"
-msgstr "Total de Destinatários"
-
-msgid "Emails Sent"
-msgstr "Emails Enviados"
-
-msgid "Delivery Rate"
-msgstr "Taxa de Entrega"
-
-msgid "Open Rate"
-msgstr "Taxa de Abertura"
-
-msgid "Click Rate"
-msgstr "Taxa de Clique"
-
-msgid "Bounce Rate"
-msgstr "Taxa de Rejeição"
-
-msgid "Complaint Rate"
-msgstr "Taxa de Reclamações"
-
-# Dashboard
-msgid "Bulk Email Dashboard"
-msgstr "Painel de Email em Massa"
-
-msgid "Total Campaigns"
-msgstr "Total de Campanhas"
-
-msgid "Recent Campaigns"
-msgstr "Campanhas Recentes"
-
-msgid "Name"
-msgstr "Nome"
-
-msgid "Scheduled Time"
-msgstr "Horário Agendado"
-
-msgid "Actions"
-msgstr "Ações"
-
-msgid "No campaigns yet."
-msgstr "Nenhuma campanha ainda."
-
-msgid "Create one now"
-msgstr "Criar uma agora"
-
-msgid "View All Campaigns"
-msgstr "Ver Todas as Campanhas"
-
-# Verify Recipients page
-msgid "Verify Email Recipients"
-msgstr "Verificar Destinatários de Email"
-
-msgid "This tool verifies the email addresses in your campaign to reduce bounce rates. The verification process checks:"
-msgstr "Esta ferramenta verifica os endereços de email em sua campanha para reduzir taxas de rejeição. O processo de verificação inclui:"
-
-msgid "Email syntax validity"
-msgstr "Validade da sintaxe do email"
-
-msgid "Domain existence (DNS lookup)"
-msgstr "Existência do domínio (consulta DNS)"
-
-msgid "Basic MX record validation"
-msgstr "Validação básica de registros MX"
-
-msgid "Select Campaign"
-msgstr "Selecionar Campanha"
-
-msgid "Select a campaign"
-msgstr "Selecione uma campanha"
-
-msgid "Start Verification"
-msgstr "Iniciar Verificação"
-
-msgid "No campaigns available for verification."
-msgstr "Nenhuma campanha disponível para verificação."
-
-msgid "first."
-msgstr "primeiro."
-
-msgid "Back to Campaigns"
-msgstr "Voltar para Campanhas"
-
-# Email Tracking page
-msgid "Email Tracking - Campaign Reports"
-msgstr "Rastreamento de Email - Relatórios de Campanha"
-
-msgid "Email Tracking Reports"
-msgstr "Relatórios de Rastreamento de Email"
-
-msgid "Select a campaign to view its detailed tracking data. These reports show opens and clicks for emails sent in each campaign."
-msgstr "Selecione uma campanha para ver seus dados detalhados de rastreamento. Estes relatórios mostram aberturas e cliques para emails enviados em cada campanha."
-
-msgid "Status"
-msgstr "Status"
-
-msgid "Recipients"
-msgstr "Destinatários"
-
-msgid "Opens"
-msgstr "Aberturas"
-
-msgid "Clicks"
-msgstr "Cliques"
-
-msgid "No campaigns available for tracking."
-msgstr "Nenhuma campanha disponível para rastreamento."
-
 # Common actions
 #~ msgid "Edit"
 #~ msgstr "Editar"
@@ -701,4 +893,17 @@ msgstr "Nenhuma campanha disponível para rastreamento."
 
 #~ msgid "Next"
 #~ msgstr "Próximo"
+
+# Statistics and metrics
+#~ msgid "Total Recipients"
+#~ msgstr "Total de Destinatários"
+
+#~ msgid "Emails Sent"
+#~ msgstr "Emails Enviados"
+
+#~ msgid "Open Rate"
+#~ msgstr "Taxa de Abertura"
+
+#~ msgid "Click Rate"
+#~ msgstr "Taxa de Clique"
 

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2025-05-29 19:44-0300\n"
+"POT-Creation-Date: 2025-05-29 21:21-0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -21,19 +21,20 @@ msgstr ""
 msgid "Bulk Email"
 msgstr ""
 
-#: templates/base.html:90 templates/base.html:119
+#: templates/base.html:90 templates/base.html:119 templates/index.html:8
 msgid "Dashboard"
 msgstr ""
 
-#: templates/base.html:93 templates/base.html:122
+#: templates/base.html:93 templates/base.html:122 templates/campaigns.html:3
+#: templates/campaigns.html:8
 msgid "Campaigns"
 msgstr ""
 
-#: templates/base.html:125
+#: templates/base.html:125 templates/campaigns.html:10
 msgid "New Campaign"
 msgstr ""
 
-#: templates/base.html:128
+#: templates/base.html:128 templates/bounce_report.html:3
 msgid "Bounce Report"
 msgstr ""
 
@@ -43,6 +44,290 @@ msgstr ""
 
 #: templates/base.html:134
 msgid "Email Tracking"
+msgstr ""
+
+#: templates/bounce_report.html:8
+msgid "Email Bounce Report"
+msgstr ""
+
+#: templates/bounce_report.html:10 templates/create_campaign.html:22
+#: templates/tracking_campaigns.html:42 templates/verify_recipients.html:41
+msgid "Back to Campaigns"
+msgstr ""
+
+#: templates/bounce_report.html:16
+msgid "Bounced Emails"
+msgstr ""
+
+#: templates/bounce_report.html:24 templates/bounce_report.html:84
+msgid "Campaign"
+msgstr ""
+
+#: templates/bounce_report.html:25 templates/bounce_report.html:85
+msgid "Email"
+msgstr ""
+
+#: templates/bounce_report.html:26 templates/bounce_report.html:86
+#: templates/campaigns.html:23 templates/index.html:62
+#: templates/tracking_campaigns.html:25
+msgid "Status"
+msgstr ""
+
+#: templates/bounce_report.html:27
+msgid "Bounce Type"
+msgstr ""
+
+#: templates/bounce_report.html:28
+msgid "Bounce Subtype"
+msgstr ""
+
+#: templates/bounce_report.html:29
+msgid "Bounce Time"
+msgstr ""
+
+#: templates/bounce_report.html:30 templates/bounce_report.html:89
+msgid "Message ID"
+msgstr ""
+
+#: templates/bounce_report.html:31
+msgid "Diagnostics"
+msgstr ""
+
+#: templates/bounce_report.html:68
+msgid ""
+"No bounced emails found. This could mean either all emails were delivered"
+" successfully or bounce notifications haven't been received yet."
+msgstr ""
+
+#: templates/bounce_report.html:76
+msgid "Complaint Emails"
+msgstr ""
+
+#: templates/bounce_report.html:87
+msgid "Complaint Type"
+msgstr ""
+
+#: templates/bounce_report.html:88
+msgid "Complaint Time"
+msgstr ""
+
+#: templates/bounce_report.html:115
+msgid ""
+"No complaint emails found. This means no recipients have marked your "
+"emails as spam."
+msgstr ""
+
+#: templates/bounce_report.html:123
+msgid "Delivery Statistics"
+msgstr ""
+
+#: templates/bounce_report.html:131
+msgid "Delivered"
+msgstr ""
+
+#: templates/bounce_report.html:139
+msgid "Bounced"
+msgstr ""
+
+#: templates/bounce_report.html:147
+msgid "Complained"
+msgstr ""
+
+#: templates/campaigns.html:3
+msgid "Bulk Email Scheduler"
+msgstr ""
+
+#: templates/campaigns.html:20 templates/index.html:60
+msgid "Name"
+msgstr ""
+
+#: templates/campaigns.html:21
+msgid "Subject"
+msgstr ""
+
+#: templates/campaigns.html:22 templates/index.html:61
+msgid "Scheduled Time"
+msgstr ""
+
+#: templates/campaigns.html:24
+msgid "Created"
+msgstr ""
+
+#: templates/campaigns.html:25 templates/index.html:63
+msgid "Actions"
+msgstr ""
+
+#: templates/campaigns.html:37 templates/index.html:34
+msgid "Pending"
+msgstr ""
+
+#: templates/campaigns.html:39
+msgid "In Progress"
+msgstr ""
+
+#: templates/campaigns.html:41 templates/index.html:26
+msgid "Completed"
+msgstr ""
+
+#: templates/campaigns.html:43 templates/index.html:42
+msgid "Failed"
+msgstr ""
+
+#: templates/campaigns.html:45
+msgid "Cancelled"
+msgstr ""
+
+#: templates/campaigns.html:72
+msgid "Delete Campaign"
+msgstr ""
+
+#: templates/campaigns.html:76
+#, python-format
+msgid ""
+"Are you sure you want to delete the campaign \"%(name)s\"? This action "
+"cannot be undone."
+msgstr ""
+
+#: templates/campaigns.html:79 templates/create_campaign.html:156
+msgid "Cancel"
+msgstr ""
+
+#: templates/campaigns.html:81
+msgid "Delete"
+msgstr ""
+
+#: templates/campaigns.html:91 templates/index.html:89
+msgid "No campaigns yet."
+msgstr ""
+
+#: templates/campaigns.html:91 templates/index.html:89
+msgid "Create one now"
+msgstr ""
+
+#: templates/create_campaign.html:3
+msgid "Bulk Email Create Campaign"
+msgstr ""
+
+#: templates/create_campaign.html:20
+msgid "Create New Campaign"
+msgstr ""
+
+#: templates/create_campaign.html:125
+msgid "Template Variables"
+msgstr ""
+
+#: templates/create_campaign.html:126
+msgid "Use these placeholders in your email to personalize it for each recipient:"
+msgstr ""
+
+#: templates/create_campaign.html:128
+msgid "Recipient's name"
+msgstr ""
+
+#: templates/create_campaign.html:129
+msgid "Any column from your CSV/Excel file"
+msgstr ""
+
+#: templates/create_campaign.html:144
+msgid ""
+"Plain text version of the email (optional, for clients that don't support"
+" HTML)"
+msgstr ""
+
+#: templates/create_campaign.html:174
+msgid "Compose your email here..."
+msgstr ""
+
+#: templates/index.html:3
+msgid "Bulk Email Dashboard"
+msgstr ""
+
+#: templates/index.html:18
+msgid "Total Campaigns"
+msgstr ""
+
+#: templates/index.html:53
+msgid "Recent Campaigns"
+msgstr ""
+
+#: templates/index.html:97
+msgid "View All Campaigns"
+msgstr ""
+
+#: templates/tracking_campaigns.html:3
+msgid "Email Tracking - Campaign Reports"
+msgstr ""
+
+#: templates/tracking_campaigns.html:8
+msgid "Email Tracking Reports"
+msgstr ""
+
+#: templates/tracking_campaigns.html:12
+msgid ""
+"Select a campaign to view its detailed tracking data. These reports show "
+"opens and clicks for emails sent in each campaign."
+msgstr ""
+
+#: templates/tracking_campaigns.html:27
+msgid "Recipients"
+msgstr ""
+
+#: templates/tracking_campaigns.html:28
+msgid "Opens"
+msgstr ""
+
+#: templates/tracking_campaigns.html:29
+msgid "Clicks"
+msgstr ""
+
+#: templates/tracking_campaigns.html:37
+msgid "No campaigns available for tracking."
+msgstr ""
+
+#: templates/tracking_campaigns.html:37 templates/verify_recipients.html:36
+msgid "Create a campaign"
+msgstr ""
+
+#: templates/tracking_campaigns.html:37 templates/verify_recipients.html:36
+msgid "first."
+msgstr ""
+
+#: templates/verify_recipients.html:3 templates/verify_recipients.html:8
+msgid "Verify Email Recipients"
+msgstr ""
+
+#: templates/verify_recipients.html:12
+msgid ""
+"This tool verifies the email addresses in your campaign to reduce bounce "
+"rates. The verification process checks:"
+msgstr ""
+
+#: templates/verify_recipients.html:14
+msgid "Email syntax validity"
+msgstr ""
+
+#: templates/verify_recipients.html:15
+msgid "Domain existence (DNS lookup)"
+msgstr ""
+
+#: templates/verify_recipients.html:16
+msgid "Basic MX record validation"
+msgstr ""
+
+#: templates/verify_recipients.html:23
+msgid "Select Campaign"
+msgstr ""
+
+#: templates/verify_recipients.html:25
+msgid "Select a campaign"
+msgstr ""
+
+#: templates/verify_recipients.html:32
+msgid "Start Verification"
+msgstr ""
+
+#: templates/verify_recipients.html:36
+msgid "No campaigns available for verification."
 msgstr ""
 
 #: venv/lib/python3.13/site-packages/click/_termui_impl.py:556

@@ -1,13 +1,13 @@
 {% extends 'base.html' %}
 
-{% block title %}Campaigns - Bulk Email Scheduler{% endblock %}
+{% block title %}{{ _('Campaigns') }} - {{ _('Bulk Email Scheduler') }}{% endblock %}
 
 {% block content %}
 <div class="container-fluid">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2><i class="bi bi-envelope me-2"></i>Campaigns</h2>
+        <h2><i class="bi bi-envelope me-2"></i>{{ _('Campaigns') }}</h2>
         <a href="{{ url_for('create_campaign') }}" class="btn btn-primary">
-            <i class="bi bi-plus-circle me-2"></i>New Campaign
+            <i class="bi bi-plus-circle me-2"></i>{{ _('New Campaign') }}
         </a>
     </div>
 
@@ -17,12 +17,12 @@
                 <table class="table table-hover">
                     <thead>
                         <tr>
-                            <th>Name</th>
-                            <th>Subject</th>
-                            <th>Scheduled Time</th>
-                            <th>Status</th>
-                            <th>Created</th>
-                            <th>Actions</th>
+                            <th>{{ _('Name') }}</th>
+                            <th>{{ _('Subject') }}</th>
+                            <th>{{ _('Scheduled Time') }}</th>
+                            <th>{{ _('Status') }}</th>
+                            <th>{{ _('Created') }}</th>
+                            <th>{{ _('Actions') }}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -33,7 +33,19 @@
                             <td>{{ campaign.scheduled_time.strftime('%Y-%m-%d %H:%M') }}</td>
                             <td>
                                 <span class="campaign-status status-{{ campaign.status }}">
-                                    {{ campaign.status|replace('_', ' ')|title }}
+                                    {% if campaign.status == 'pending' %}
+                                        {{ _('Pending') }}
+                                    {% elif campaign.status == 'in_progress' %}
+                                        {{ _('In Progress') }}
+                                    {% elif campaign.status == 'completed' %}
+                                        {{ _('Completed') }}
+                                    {% elif campaign.status == 'failed' %}
+                                        {{ _('Failed') }}
+                                    {% elif campaign.status == 'cancelled' %}
+                                        {{ _('Cancelled') }}
+                                    {% else %}
+                                        {{ campaign.status|replace('_', ' ')|title }}
+                                    {% endif %}
                                 </span>
                             </td>
                             <td>{{ campaign.created_at.strftime('%Y-%m-%d') }}</td>
@@ -57,16 +69,16 @@
                                     <div class="modal-dialog">
                                         <div class="modal-content">
                                             <div class="modal-header">
-                                                <h5 class="modal-title">Delete Campaign</h5>
+                                                <h5 class="modal-title">{{ _('Delete Campaign') }}</h5>
                                                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                                             </div>
                                             <div class="modal-body">
-                                                Are you sure you want to delete the campaign "{{ campaign.name }}"? This action cannot be undone.
+                                                {{ _('Are you sure you want to delete the campaign "%(name)s"? This action cannot be undone.', name=campaign.name) }}
                                             </div>
                                             <div class="modal-footer">
-                                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ _('Cancel') }}</button>
                                                 <form action="{{ url_for('delete_campaign', campaign_id=campaign.id) }}" method="post">
-                                                    <button type="submit" class="btn btn-danger">Delete</button>
+                                                    <button type="submit" class="btn btn-danger">{{ _('Delete') }}</button>
                                                 </form>
                                             </div>
                                         </div>
@@ -76,7 +88,7 @@
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="6" class="text-center">No campaigns yet. <a href="{{ url_for('create_campaign') }}">Create one now</a>.</td>
+                            <td colspan="6" class="text-center">{{ _('No campaigns yet.') }} <a href="{{ url_for('create_campaign') }}">{{ _('Create one now') }}</a>.</td>
                         </tr>
                         {% endfor %}
                     </tbody>

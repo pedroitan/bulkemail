@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 
-{% block title %}Bulk Email Create Campaign{% endblock %}
+{% block title %}{{ _('Bulk Email Create Campaign') }}{% endblock %}
 
 {% block extra_css %}
 <link href="https://cdn.jsdelivr.net/npm/summernote@0.8.18/dist/summernote-bs4.min.css" rel="stylesheet">
@@ -17,9 +17,9 @@
 {% block content %}
 <div class="container-fluid">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2><i class="bi bi-plus-circle me-2"></i>Create New Campaign</h2>
+        <h2><i class="bi bi-plus-circle me-2"></i>{{ _('Create New Campaign') }}</h2>
         <a href="{{ url_for('campaigns') }}" class="btn btn-outline-secondary">
-            <i class="bi bi-arrow-left me-2"></i>Back to Campaigns
+            <i class="bi bi-arrow-left me-2"></i>{{ _('Back to Campaigns') }}
         </a>
     </div>
 
@@ -122,11 +122,11 @@
                 <div class="form-group">
                     {{ form.body_html.label(class="form-label") }}
                     <div class="alert alert-info">
-                        <h6><i class="bi bi-info-circle me-2"></i>Template Variables</h6>
-                        <p class="mb-1">Use these placeholders in your email to personalize it for each recipient:</p>
+                        <h6><i class="bi bi-info-circle me-2"></i>{{ _('Template Variables') }}</h6>
+                        <p class="mb-1">{{ _('Use these placeholders in your email to personalize it for each recipient:') }}</p>
                         <ul class="mb-0">
-                            <li><code>${name}</code> - Recipient's name</li>
-                            <li><code>${any_column}</code> - Any column from your CSV/Excel file</li>
+                            <li><code>${name}</code> - {{ _('Recipient\'s name') }}</li>
+                            <li><code>${any_column}</code> - {{ _('Any column from your CSV/Excel file') }}</li>
                         </ul>
                     </div>
                     {{ form.body_html(class="form-control", id="summernote") }}
@@ -141,7 +141,7 @@
                 
                 <div class="form-group">
                     {{ form.body_text.label(class="form-label") }}
-                    <div class="small text-muted mb-2">Plain text version of the email (optional, for clients that don't support HTML)</div>
+                    <div class="small text-muted mb-2">{{ _('Plain text version of the email (optional, for clients that don\'t support HTML)') }}</div>
                     {{ form.body_text(class="form-control", rows=5) }}
                     {% if form.body_text.errors %}
                     <div class="invalid-feedback d-block">
@@ -153,7 +153,7 @@
                 </div>
                 
                 <div class="d-grid gap-2 d-md-flex justify-content-md-end">
-                    <a href="{{ url_for('campaigns') }}" class="btn btn-outline-secondary">Cancel</a>
+                    <a href="{{ url_for('campaigns') }}" class="btn btn-outline-secondary">{{ _('Cancel') }}</a>
                     {{ form.submit(class="btn btn-primary") }}
                 </div>
             </form>
@@ -171,7 +171,7 @@
 <script>
     $(document).ready(function() {
         $('#summernote').summernote({
-            placeholder: 'Compose your email here...',
+            placeholder: "{{ _('Compose your email here...') }}",
             tabsize: 2,
             height: 300,
             toolbar: [
