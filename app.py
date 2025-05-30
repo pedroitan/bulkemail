@@ -1711,11 +1711,156 @@ def create_app(config_object='config.Config'):
             db.session.commit()
             
             flash(f'Email verification started for {len(emails)} recipients. This may take a few minutes.', 'info')
-            return redirect(url_for('campaign_detail', campaign_id=campaign_id))
+            return redirect(url_for('verify_recipients_results', campaign_id=campaign_id))
         
         # GET request - show form
         campaigns = EmailCampaign.query.all()
         return render_template('verify_recipients.html', campaigns=campaigns)
+        
+    @app.route('/recipients/verify/<int:campaign_id>/results', methods=['GET'])
+    def verify_recipients_results(campaign_id):
+        """Show verification results for a campaign"""
+        campaign = EmailCampaign.query.get_or_404(campaign_id)
+        
+        # Get filter parameters
+        status = request.args.get('status', 'all')
+        sort = request.args.get('sort', 'email')
+        q = request.args.get('q', '')
+        page = request.args.get('page', 1, type=int)
+        per_page = 50
+        
+        # Base query
+        query = EmailRecipient.query.filter_by(campaign_id=campaign_id)
+        
+        # Apply filters
+        if status == 'valid':
+            query = query.filter(EmailRecipient.verification_result == 'valid')
+        elif status == 'invalid':
+            query = query.filter(or_(
+                EmailRecipient.verification_result == 'invalid',
+                EmailRecipient.verification_result == 'syntax_error',
+                EmailRecipient.verification_result == 'mx_error',
+                EmailRecipient.verification_result == 'mailbox_error'
+            ))
+        elif status == 'unverified':
+            query = query.filter(or_(
+                EmailRecipient.verification_result == None,
+                EmailRecipient.verification_result == ''
+            ))
+            
+        # Apply search if provided
+        if q:
+            query = query.filter(EmailRecipient.email.ilike(f'%{q}%'))
+            
+        # Apply sorting
+        if sort == 'email':
+            query = query.order_by(EmailRecipient.email)
+        elif sort == 'verification_date':
+            query = query.order_by(EmailRecipient.verification_date.desc().nullslast())
+            
+        # Count recipients by verification status for stats
+        total_recipients = EmailRecipient.query.filter_by(campaign_id=campaign_id).count()
+        valid_count = EmailRecipient.query.filter_by(
+            campaign_id=campaign_id, 
+            verification_result='valid'
+        ).count()
+        
+        # Count invalid recipients (combining all error categories)
+        invalid_count = EmailRecipient.query.filter(
+            EmailRecipient.campaign_id == campaign_id,
+            or_(
+                EmailRecipient.verification_result == 'invalid',
+                EmailRecipient.verification_result == 'syntax_error', 
+                EmailRecipient.verification_result == 'mx_error',
+                EmailRecipient.verification_result == 'mailbox_error'
+            )
+        ).count()
+        
+        # Calculate unverified count
+        unverified_count = total_recipients - valid_count - invalid_count
+        
+        # Paginate results
+        pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+        recipients = pagination.items
+        
+        return render_template(
+            'verify_recipients_results.html',
+            campaign=campaign,
+            recipients=recipients,
+            pagination=pagination,
+            total_recipients=total_recipients,
+            valid_count=valid_count,
+            invalid_count=invalid_count,
+            unverified_count=unverified_count,
+            status=status,
+            sort=sort,
+            q=q
+        )
+        
+    @app.route('/recipients/verify/<int:campaign_id>/download', methods=['GET'])
+    def download_verification_report(campaign_id):
+        """Generate and download a verification report"""
+        campaign = EmailCampaign.query.get_or_404(campaign_id)
+        
+        # Create CSV in memory
+        import csv
+        import io
+        import codecs
+        
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        # Write header
+        writer.writerow(['Email', 'Verification Status', 'Verification Date'])
+        
+        # Get all recipients for this campaign
+        recipients = EmailRecipient.query.filter_by(campaign_id=campaign_id).all()
+        
+        # Write data
+        for recipient in recipients:
+            status = recipient.verification_result or 'unverified'
+            verification_date = ''
+            if recipient.verification_date:
+                verification_date = recipient.verification_date.strftime('%Y-%m-%d %H:%M:%S')
+                
+            writer.writerow([recipient.email, status, verification_date])
+        
+        # Prepare response
+        response = make_response(output.getvalue())
+        response.headers["Content-Disposition"] = f"attachment; filename=verification_report_{campaign_id}.csv"
+        response.headers["Content-type"] = "text/csv"
+        
+        return response
+        
+    @app.route('/recipients/verify/<int:campaign_id>/remove_invalid', methods=['GET'])
+    def remove_invalid_recipients(campaign_id):
+        """Remove all invalid email recipients from a campaign"""
+        campaign = EmailCampaign.query.get_or_404(campaign_id)
+        
+        # Find all invalid recipients
+        invalid_recipients = EmailRecipient.query.filter(
+            EmailRecipient.campaign_id == campaign_id,
+            or_(
+                EmailRecipient.verification_result == 'invalid',
+                EmailRecipient.verification_result == 'syntax_error', 
+                EmailRecipient.verification_result == 'mx_error',
+                EmailRecipient.verification_result == 'mailbox_error'
+            )
+        ).all()
+        
+        count = len(invalid_recipients)
+        
+        if count > 0:
+            # Delete invalid recipients
+            for recipient in invalid_recipients:
+                db.session.delete(recipient)
+                
+            db.session.commit()
+            flash(f'Successfully removed {count} invalid email addresses from your campaign.', 'success')
+        else:
+            flash('No invalid email addresses found in this campaign.', 'info')
+            
+        return redirect(url_for('verify_recipients_results', campaign_id=campaign_id))
     
     @app.route('/reports/tracking', methods=['GET'])
     def tracking_report():
@@ -2599,6 +2744,22 @@ app = get_app()
 with app.app_context():
     scheduler = app.get_scheduler()
     # Make sure scheduler is running
+    
+    # Register our scheduled execution commands
+    try:
+        from commands import register_commands
+        register_commands(app)
+        app.logger.info('Registered batch processing commands for scheduled execution')
+    except Exception as e:
+        app.logger.error(f'Error registering batch processing commands: {str(e)}')
+    
+    # Register scheduled execution routes
+    try:
+        from scheduled_execution import register_routes
+        register_routes(app)
+        app.logger.info('Registered scheduled execution routes for large email campaigns')
+    except Exception as e:
+        app.logger.error(f'Error registering scheduled execution routes: {str(e)}')
     if scheduler.scheduler and not scheduler.scheduler.running:
         scheduler.init_scheduler(app)
 

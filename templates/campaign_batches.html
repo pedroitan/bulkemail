@@ -1,0 +1,192 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ _('Campaign Batch Status') }} - {{ campaign.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="bi bi-grid-3x3-gap me-2"></i>{{ _('Batch Processing Status') }}</h2>
+        <a href="{{ url_for('campaign_detail', campaign_id=campaign.id) }}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-2"></i>{{ _('Back to Campaign') }}
+        </a>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">{{ _('Campaign Information') }}</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-4">
+                    <p><strong>{{ _('Name') }}:</strong> {{ campaign.name }}</p>
+                    <p><strong>{{ _('Subject') }}:</strong> {{ campaign.subject }}</p>
+                    <p><strong>{{ _('Status') }}:</strong> 
+                        <span class="campaign-status status-{{ campaign.status }}">
+                            {% if campaign.status == 'pending' %}
+                                {{ _('Pending') }}
+                            {% elif campaign.status == 'scheduled' %}
+                                {{ _('Scheduled') }}
+                            {% elif campaign.status == 'in_progress' %}
+                                {{ _('In Progress') }}
+                            {% elif campaign.status == 'completed' %}
+                                {{ _('Completed') }}
+                            {% elif campaign.status == 'failed' %}
+                                {{ _('Failed') }}
+                            {% else %}
+                                {{ campaign.status|replace('_', ' ')|title }}
+                            {% endif %}
+                        </span>
+                    </p>
+                </div>
+                <div class="col-md-4">
+                    <p><strong>{{ _('Batch Size') }}:</strong> {{ campaign.batch_size }}</p>
+                    <p><strong>{{ _('Processing Interval') }}:</strong> {{ _('Every') }} {{ campaign.batch_interval_minutes }} {{ _('minutes') }}</p>
+                    <p><strong>{{ _('Scheduled Start') }}:</strong> {{ campaign.scheduled_time.strftime('%Y-%m-%d %H:%M') }}</p>
+                </div>
+                <div class="col-md-4">
+                    <p><strong>{{ _('Total Batches') }}:</strong> {{ total_batches }}</p>
+                    <p><strong>{{ _('Completed Batches') }}:</strong> {{ completed_batches }} ({{ progress_pct|round(1) }}%)</p>
+                    <p><strong>{{ _('Recipients Processed') }}:</strong> {{ total_processed }}</p>
+                </div>
+            </div>
+
+            <!-- Progress bar -->
+            <div class="progress mt-3" style="height: 25px;">
+                <div class="progress-bar progress-bar-striped progress-bar-animated bg-success" role="progressbar" 
+                     style="width: {{ progress_pct }}%;" aria-valuenow="{{ progress_pct }}" aria-valuemin="0" aria-valuemax="100">
+                    {{ progress_pct|round(1) }}%
+                </div>
+            </div>
+
+            <!-- Batch status summary -->
+            <div class="row mt-4">
+                <div class="col-md-3">
+                    <div class="card bg-light">
+                        <div class="card-body text-center">
+                            <h3>{{ completed_batches }}</h3>
+                            <p class="mb-0">{{ _('Completed') }}</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-light">
+                        <div class="card-body text-center">
+                            <h3>{{ in_progress_batches }}</h3>
+                            <p class="mb-0">{{ _('In Progress') }}</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-light">
+                        <div class="card-body text-center">
+                            <h3>{{ pending_batches }}</h3>
+                            <p class="mb-0">{{ _('Pending') }}</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-light">
+                        <div class="card-body text-center">
+                            <h3>{{ failed_batches }}</h3>
+                            <p class="mb-0">{{ _('Failed') }}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Batch Details Table -->
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0">{{ _('Batch Details') }}</h5>
+        </div>
+        <div class="card-body">
+            {% if batches %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>{{ _('Batch #') }}</th>
+                            <th>{{ _('Start Index') }}</th>
+                            <th>{{ _('Status') }}</th>
+                            <th>{{ _('Scheduled Time') }}</th>
+                            <th>{{ _('Started') }}</th>
+                            <th>{{ _('Completed') }}</th>
+                            <th>{{ _('Processed') }}</th>
+                            <th>{{ _('Failed') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for batch in batches %}
+                        <tr>
+                            <td>{{ batch.batch_number }}</td>
+                            <td>{{ batch.start_index }}</td>
+                            <td>
+                                {% if batch.status == 'pending' %}
+                                <span class="badge bg-secondary">{{ _('Pending') }}</span>
+                                {% elif batch.status == 'in_progress' %}
+                                <span class="badge bg-info">{{ _('In Progress') }}</span>
+                                {% elif batch.status == 'completed' %}
+                                <span class="badge bg-success">{{ _('Completed') }}</span>
+                                {% elif batch.status == 'failed' %}
+                                <span class="badge bg-danger">{{ _('Failed') }}</span>
+                                {% else %}
+                                <span class="badge bg-secondary">{{ batch.status|title }}</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ batch.scheduled_time.strftime('%Y-%m-%d %H:%M') }}</td>
+                            <td>{{ batch.started_at.strftime('%Y-%m-%d %H:%M') if batch.started_at else '-' }}</td>
+                            <td>{{ batch.completed_at.strftime('%Y-%m-%d %H:%M') if batch.completed_at else '-' }}</td>
+                            <td>{{ batch.processed_count or 0 }}</td>
+                            <td>
+                                {% if batch.failed_count and batch.failed_count > 0 %}
+                                <span class="text-danger">{{ batch.failed_count }}</span>
+                                {% else %}
+                                0
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle me-2"></i>
+                {{ _('No batch records found for this campaign.') }}
+            </div>
+            {% endif %}
+
+            {% if campaign.status in ['scheduled', 'in_progress'] and pending_batches > 0 %}
+            <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-3">
+                <a href="{{ url_for('manual_process_next_batch', campaign_id=campaign.id) }}" class="btn btn-primary">
+                    <i class="bi bi-play-fill me-2"></i>{{ _('Process Next Batch Manually') }}
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Render Job Setup Instructions -->
+    <div class="card mt-4">
+        <div class="card-header">
+            <h5 class="mb-0">{{ _('Render Job Configuration') }}</h5>
+        </div>
+        <div class="card-body">
+            <div class="alert alert-info">
+                <h6><i class="bi bi-info-circle me-2"></i>{{ _('Render Scheduled Job Configuration') }}</h6>
+                <p>{{ _('To set up your Render scheduled job for processing this campaign:') }}</p>
+                <ol>
+                    <li>{{ _('Go to your Render dashboard') }}</li>
+                    <li>{{ _('Navigate to your cron job service') }}</li>
+                    <li>{{ _('Edit the job command to match:') }}</li>
+                    <pre class="bg-light p-2"><code>python -m flask process_email_batch {{ campaign.id }} --batch-size {{ campaign.batch_size }}</code></pre>
+                    <li>{{ _('Set the schedule to run every') }} {{ campaign.batch_interval_minutes }} {{ _('minutes') }}:</li>
+                    <pre class="bg-light p-2"><code>*/{{ campaign.batch_interval_minutes }} * * * *</code></pre>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

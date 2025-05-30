@@ -1,0 +1,106 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ _('Schedule Campaign Execution') }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="bi bi-calendar-check me-2"></i>{{ _('Schedule Campaign Execution') }}</h2>
+        <a href="{{ url_for('campaigns') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-2"></i>{{ _('Back to Campaigns') }}
+        </a>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">{{ _('Campaign Information') }}</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <p><strong>{{ _('Name') }}:</strong> {{ campaign.name }}</p>
+                    <p><strong>{{ _('Subject') }}:</strong> {{ campaign.subject }}</p>
+                    <p><strong>{{ _('Sender') }}:</strong> {{ campaign.sender_name }} &lt;{{ campaign.sender_email }}@{{ campaign.sender_domain }}&gt;</p>
+                </div>
+                <div class="col-md-6">
+                    <p><strong>{{ _('Recipients') }}:</strong> {{ recipient_count }}</p>
+                    <p><strong>{{ _('Status') }}:</strong> {{ campaign.status|replace('_', ' ')|title }}</p>
+                    <p><strong>{{ _('Created') }}:</strong> {{ campaign.created_at.strftime('%Y-%m-%d %H:%M') }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">{{ _('Scheduling Options') }}</h5>
+        </div>
+        <div class="card-body">
+            <div class="alert alert-info">
+                <p>{{ _('For large email volumes, it\'s recommended to use scheduled batch processing. This will:') }}</p>
+                <ul>
+                    <li>{{ _('Split your campaign into smaller batches (1,000 emails each)') }}</li>
+                    <li>{{ _('Process batches at regular intervals to avoid server overload') }}</li>
+                    <li>{{ _('Automatically retry any failed deliveries') }}</li>
+                    <li>{{ _('Track progress through the campaign dashboard') }}</li>
+                </ul>
+            </div>
+
+            <form method="post" action="{{ url_for('schedule_campaign_execution', campaign_id=campaign.id) }}">
+                <div class="mb-3">
+                    <label for="batch_size" class="form-label">{{ _('Batch Size') }}</label>
+                    <select class="form-select" id="batch_size" name="batch_size">
+                        <option value="100">100 {{ _('emails per batch') }} ({{ _('Very small campaigns') }})</option>
+                        <option value="500">500 {{ _('emails per batch') }} ({{ _('Small campaigns') }})</option>
+                        <option value="1000" selected>1,000 {{ _('emails per batch') }} ({{ _('Recommended') }})</option>
+                        <option value="2000">2,000 {{ _('emails per batch') }} ({{ _('Medium campaigns') }})</option>
+                        <option value="5000">5,000 {{ _('emails per batch') }} ({{ _('Large campaigns, use with caution') }})</option>
+                    </select>
+                    <div class="form-text">{{ _('Larger batch sizes process faster but may encounter more errors') }}</div>
+                </div>
+
+                <div class="mb-3">
+                    <label for="interval_minutes" class="form-label">{{ _('Processing Interval') }}</label>
+                    <select class="form-select" id="interval_minutes" name="interval_minutes">
+                        <option value="5" selected>{{ _('Every 5 minutes') }} ({{ _('Recommended') }})</option>
+                        <option value="15">{{ _('Every 15 minutes') }} ({{ _('Better for very large campaigns') }})</option>
+                        <option value="30">{{ _('Every 30 minutes') }} ({{ _('Best for huge campaigns with strict limits') }})</option>
+                        <option value="60">{{ _('Every 60 minutes') }} ({{ _('Extremely slow but safest') }})</option>
+                    </select>
+                    <div class="form-text">{{ _('How often each batch will be processed. Longer intervals reduce the risk of rate limiting.') }}</div>
+                </div>
+
+                <div class="mb-3">
+                    <label for="scheduled_time" class="form-label">{{ _('Start Time') }}</label>
+                    <input type="datetime-local" class="form-control" id="scheduled_time" name="scheduled_time" 
+                        value="{{ (campaign.scheduled_time or now).strftime('%Y-%m-%dT%H:%M') }}" required>
+                    <div class="form-text">{{ _('When the first batch should start processing') }}</div>
+                </div>
+
+                <div class="form-check mb-3">
+                    <input class="form-check-input" type="checkbox" id="use_scheduled_execution" name="use_scheduled_execution" checked>
+                    <label class="form-check-label" for="use_scheduled_execution">
+                        {{ _('Use scheduled batch processing') }} ({{ _('recommended for large volumes') }})
+                    </label>
+                </div>
+
+                <div class="mb-3">
+                    <div class="alert alert-warning">
+                        <h6><i class="bi bi-exclamation-triangle me-2"></i>{{ _('Important Notes') }}</h6>
+                        <ul class="mb-0">
+                            <li>{{ _('Scheduled execution requires proper configuration on Render.') }}</li>
+                            <li>{{ _('Make sure to set up a cron job in the Render dashboard as described in the docs.') }}</li>
+                            <li>{{ _('You cannot stop a campaign once it starts sending.') }}</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                    <a href="{{ url_for('campaign_detail', campaign_id=campaign.id) }}" class="btn btn-outline-secondary">{{ _('Cancel') }}</a>
+                    <button type="submit" class="btn btn-primary">{{ _('Schedule Campaign') }}</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

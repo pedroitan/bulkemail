@@ -19,6 +19,7 @@ class EmailCampaign(db.Model):
     body_text = db.Column(db.Text)
     sender_name = db.Column(db.String(100))
     sender_email = db.Column(db.String(255))  # Added sender_email field
+    sender_domain = db.Column(db.String(255))  # Domain for sender email
     scheduled_time = db.Column(db.DateTime, nullable=False)
     status = db.Column(db.String(20), default='pending')  # pending, in_progress, completed, failed
     recipients_file = db.Column(db.String(255))
@@ -26,20 +27,23 @@ class EmailCampaign(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     started_at = db.Column(db.DateTime, nullable=True)  # When the campaign actually started running
     completed_at = db.Column(db.DateTime, nullable=True)  # When the campaign finished running
+    verification_status = db.Column(db.String(20), default=None, nullable=True)  # For email verification status
     
     # Fields for real-time progress tracking
     sent_count = db.Column(db.Integer, default=0)  # Number of successfully sent emails
     total_processed = db.Column(db.Integer, default=0)  # Total number of processed recipients
     progress_percentage = db.Column(db.Integer, default=0)  # Percentage of completion
     
-    # Fields for campaign segmentation to prevent crashes on large campaigns
-    # TEMPORARILY COMMENTED OUT - will be added back after deployment
-    # total_recipients = db.Column(db.Integer, default=0)  # Total number of recipients in the campaign
-    # last_segment_position = db.Column(db.Integer, default=0)  # Last processed position for segmented campaigns
-    # next_segment_time = db.Column(db.DateTime, nullable=True)  # When to run the next segment
+    # Fields for scheduled batch execution with Render
+    batch_execution_enabled = db.Column(db.Boolean, default=False)  # Whether batch execution is enabled
+    batch_size = db.Column(db.Integer, default=1000)  # Size of each batch
+    batch_interval_minutes = db.Column(db.Integer, default=5)  # Minutes between batch processing
+    total_batches = db.Column(db.Integer, default=0)  # Total number of batches
+    processed_batches = db.Column(db.Integer, default=0)  # Number of completed batches
     
-    # Relationship with EmailRecipient
+    # Relationships
     recipients = db.relationship('EmailRecipient', backref='campaign', lazy=True, cascade='all, delete-orphan')
+    batch_records = db.relationship('BatchExecutionRecord', backref='campaign', lazy=True, cascade='all, delete-orphan')
     
     def __repr__(self):
         return f'<EmailCampaign {self.name}>'
@@ -146,19 +150,44 @@ class RecipientList(db.Model):
         return f'<RecipientList {self.name}: {self.total_recipients} recipients>'
     
     def update_stats(self):
-        """Update the statistics for this recipient list"""
-        # Total count
-        self.total_recipients = db.session.query(recipient_list_items).filter_by(list_id=self.id).count()
+        """Update the statistics for this recipient list."""
+        from email_tracking import get_delivery_status
         
-        # Count by status
-        self.active_recipients = 0
-        self.bounced_recipients = 0
-        self.complained_recipients = 0
+        active = 0
+        bounced = 0
+        complained = 0
         
+        # Get all recipients in this list
         for recipient in self.recipients:
-            if recipient.global_status == 'active':
-                self.active_recipients += 1
-            elif recipient.global_status == 'bounced':
-                self.bounced_recipients += 1
-            elif recipient.global_status == 'complained':
-                self.complained_recipients += 1
+            status = get_delivery_status(recipient.email)
+            
+            if status == 'bounced':
+                bounced += 1
+            elif status == 'complained':
+                complained += 1
+            else:
+                active += 1
+        
+        self.active_recipients = active
+        self.bounced_recipients = bounced
+        self.complained_recipients = complained
+
+class BatchExecutionRecord(db.Model):
+    """Record of a batch execution for an email campaign using Render's scheduled jobs."""
+    __tablename__ = 'batch_execution_records'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    campaign_id = db.Column(db.Integer, db.ForeignKey('email_campaign.id'), nullable=False)
+    batch_number = db.Column(db.Integer, nullable=False)
+    start_index = db.Column(db.Integer, nullable=False)
+    batch_size = db.Column(db.Integer, nullable=False)
+    status = db.Column(db.String(20), default='pending')  # pending, in_progress, completed, failed
+    scheduled_time = db.Column(db.DateTime, nullable=False)
+    started_at = db.Column(db.DateTime)
+    completed_at = db.Column(db.DateTime)
+    processed_count = db.Column(db.Integer, default=0)
+    failed_count = db.Column(db.Integer, default=0)
+    error = db.Column(db.Text)
+    
+    def __repr__(self):
+        return f"<BatchExecutionRecord(id={self.id}, campaign_id={self.campaign_id}, batch_number={self.batch_number}, status={self.status})>"
