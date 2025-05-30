@@ -42,7 +42,7 @@ services:
       paths:
         - requirements.txt
     preDeployCommand: "python init_db.py && python create_batch_execution_tables.py"
-
+  
   # Batch email processor service (template job - configure for specific campaigns)
   - type: cron
     name: emailbulk-batch-processor
@@ -51,6 +51,8 @@ services:
     buildCommand: "pip install -r requirements.txt"
     startCommand: "python -m flask process_email_batch __CAMPAIGN_ID__ --batch-size 1000"
     envVars:
+      - key: FLASK_APP
+        value: wsgi.py
       - key: FLASK_ENV
         value: production
       - key: PYTHONUNBUFFERED
@@ -83,35 +85,6 @@ services:
         value: "us-east-2"
       - key: RATE_LIMIT_ENABLED
         value: "true"  # Keep the token bucket rate limiter active
-      - key: FLASK_APP
-        value: wsgi.py
-      - key: FLASK_ENV
-        value: production
-      - key: PYTHONUNBUFFERED
-        value: true
-      - key: DATABASE_URL
-        fromDatabase:
-          name: emailbulk-db
-          property: connectionString
-      - key: AWS_ACCESS_KEY_ID
-        sync: false
-      - key: AWS_SECRET_ACCESS_KEY
-        sync: false
-      - key: AWS_REGION
-        sync: false
-      - key: SENDER_EMAIL
-        sync: false
-      - key: SES_CONFIGURATION_SET
-        sync: false
-      - key: SECRET_KEY
-        generateValue: true
-    # Define scheduled jobs that will process emails in batches
-    cron:
-      # Process pending email batches every 5 minutes
-      - command: "python -m flask process_email_batch __CAMPAIGN_ID__ --batch-size 1000 --start-index 0"
-        schedule: "*/5 * * * *"
-        # This job definition is a template: __CAMPAIGN_ID__ must be updated dynamically
-        # See the README for instructions on setting up new scheduled jobs
 
 databases:
   - name: emailbulk-db
