@@ -204,7 +204,78 @@ def check_campaign_progress(campaign_id):
         click.echo(f"Status: {campaign.status}")
         click.echo(f"Progress: {sent}/{total} sent ({pending} pending, {failed} failed)")
 
+@click.command('check_pending_campaigns')
+@click.option('--process-next', is_flag=True, help='Process the next pending batch for each active campaign')
+@with_appcontext
+def check_pending_campaigns(process_next):
+    """Check for pending campaign batches and process them if requested.
+    
+    This command is designed to be run as a scheduled job in Render.
+    It looks for any campaigns with pending batches and processes the next batch
+    for each campaign when the --process-next flag is set.
+    """
+    from scheduled_execution import ScheduledExecutionManager
+    from models import EmailCampaign, BatchExecutionRecord
+    
+    # Initialize the manager
+    execution_manager = ScheduledExecutionManager(current_app)
+    
+    # Find campaigns with pending batches
+    pending_batches = BatchExecutionRecord.query.filter_by(status='pending').all()
+    campaign_ids = set(batch.campaign_id for batch in pending_batches)
+    
+    if not campaign_ids:
+        click.echo("No campaigns with pending batches found.")
+        return
+    
+    click.echo(f"Found {len(campaign_ids)} campaigns with pending batches.")
+    
+    # Process next batch for each campaign if requested
+    if process_next:
+        for campaign_id in campaign_ids:
+            # Get the campaign to check its status
+            campaign = EmailCampaign.query.get(campaign_id)
+            if not campaign:
+                click.echo(f"Campaign {campaign_id} not found.")
+                continue
+                
+            if campaign.status not in ['scheduled', 'in_progress']:
+                click.echo(f"Campaign {campaign_id} is not active (status: {campaign.status}).")
+                continue
+                
+            click.echo(f"Processing next batch for campaign {campaign_id}...")
+            # Use the actual process_email_batch command for the next pending batch
+            batch = execution_manager.get_next_pending_batch(campaign_id)
+            if not batch:
+                click.echo(f"No pending batches found for campaign {campaign_id}.")
+                continue
+                
+            # Execute the process_email_batch command with the appropriate parameters
+            ctx = click.Context(process_email_batch)
+            ctx.ensure_object(dict)
+            ctx.invoke(
+                process_email_batch,
+                campaign_id=campaign_id, 
+                batch_size=batch.batch_size,
+                start_index=batch.start_index
+            )
+            
+            click.echo(f"Processed batch {batch.batch_number} for campaign {campaign_id}.")
+    else:
+        # Just list the pending batches for each campaign
+        for campaign_id in campaign_ids:
+            campaign_batches = BatchExecutionRecord.query.filter_by(
+                campaign_id=campaign_id, 
+                status='pending'
+            ).order_by(BatchExecutionRecord.scheduled_time).all()
+            
+            click.echo(f"Campaign {campaign_id} has {len(campaign_batches)} pending batches:")
+            for batch in campaign_batches:
+                scheduled_time = batch.scheduled_time.strftime('%Y-%m-%d %H:%M:%S') if batch.scheduled_time else 'Not scheduled'
+                click.echo(f"  Batch {batch.batch_number}: {scheduled_time}")
+
 def register_commands(app):
     """Register custom CLI commands with the Flask application."""
     app.cli.add_command(process_email_batch)
     app.cli.add_command(check_campaign_progress)
+    app.cli.add_command(check_pending_campaigns)
