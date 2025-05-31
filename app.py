@@ -465,10 +465,19 @@ def create_app(config_object='config.Config'):
         try:
             campaign = EmailCampaign.query.get_or_404(campaign_id)
             
-            # Delete all recipients associated with the campaign
+            # First get all recipient IDs for this campaign
+            recipient_ids = [r.id for r in EmailRecipient.query.filter_by(campaign_id=campaign_id).all()]
+            
+            # Delete all tracking data associated with these recipients
+            if recipient_ids:
+                from models import EmailTracking
+                # Delete tracking records referencing these recipients
+                EmailTracking.query.filter(EmailTracking.recipient_id.in_(recipient_ids)).delete(synchronize_session=False)
+            
+            # Now delete all recipients associated with the campaign
             EmailRecipient.query.filter_by(campaign_id=campaign_id).delete()
             
-            # Delete the campaign
+            # Finally delete the campaign
             db.session.delete(campaign)
             db.session.commit()
             
@@ -476,6 +485,7 @@ def create_app(config_object='config.Config'):
             flash('Campaign deleted successfully', 'success')
         except Exception as e:
             db.session.rollback()
+            app.logger.error(f"Error deleting campaign: {str(e)}")
             flash(f'Error deleting campaign: {str(e)}', 'danger')
     
         # Always redirect to campaigns list
@@ -487,16 +497,26 @@ def create_app(config_object='config.Config'):
         try:
             campaign = EmailCampaign.query.get_or_404(campaign_id)
             
-            # Delete all recipients associated with the campaign
+            # First get all recipient IDs for this campaign
+            recipient_ids = [r.id for r in EmailRecipient.query.filter_by(campaign_id=campaign_id).all()]
+            
+            # Delete all tracking data associated with these recipients
+            if recipient_ids:
+                from models import EmailTracking
+                # Delete tracking records referencing these recipients
+                EmailTracking.query.filter(EmailTracking.recipient_id.in_(recipient_ids)).delete(synchronize_session=False)
+            
+            # Now delete all recipients associated with the campaign
             EmailRecipient.query.filter_by(campaign_id=campaign_id).delete()
             
-            # Delete the campaign
+            # Finally delete the campaign
             db.session.delete(campaign)
             db.session.commit()
             
             flash('Campaign deleted successfully', 'success')
         except Exception as e:
             db.session.rollback()
+            app.logger.error(f"Error deleting campaign: {str(e)}")
             flash(f'Error deleting campaign: {str(e)}', 'danger')
         
         # Always redirect back to campaigns list
@@ -508,16 +528,26 @@ def create_app(config_object='config.Config'):
         try:
             campaign = EmailCampaign.query.get_or_404(campaign_id)
             
-            # Delete all recipients associated with the campaign
+            # First get all recipient IDs for this campaign
+            recipient_ids = [r.id for r in EmailRecipient.query.filter_by(campaign_id=campaign_id).all()]
+            
+            # Delete all tracking data associated with these recipients
+            if recipient_ids:
+                from models import EmailTracking
+                # Delete tracking records referencing these recipients
+                EmailTracking.query.filter(EmailTracking.recipient_id.in_(recipient_ids)).delete(synchronize_session=False)
+            
+            # Now delete all recipients associated with the campaign
             EmailRecipient.query.filter_by(campaign_id=campaign_id).delete()
             
-            # Delete the campaign
+            # Finally delete the campaign
             db.session.delete(campaign)
             db.session.commit()
             
             flash('Campaign deleted successfully', 'success')
         except Exception as e:
             db.session.rollback()
+            app.logger.error(f"Error deleting campaign: {str(e)}")
             flash(f'Error deleting campaign: {str(e)}', 'danger')
         
         # Always redirect back to campaigns list
