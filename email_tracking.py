@@ -281,6 +281,88 @@ def tracking_redirect():
     else:
         return "Invalid tracking link", 400
 
+def get_delivery_status(recipient_id, email_id=None):
+    """
+    Get the delivery status for a recipient's email
+    
+    Args:
+        recipient_id: ID of the recipient
+        email_id: Optional ID of the specific email (if None, get latest)
+        
+    Returns:
+        Dictionary with delivery status information
+    """
+    from models import EmailRecipient, EmailTracking, EmailTrackingEvent
+    
+    # First check if recipient exists
+    recipient = EmailRecipient.query.get(recipient_id)
+    if not recipient:
+        return {
+            'status': 'unknown',
+            'timestamp': None,
+            'details': 'Recipient not found'
+        }
+    
+    # Check for bounces - this is the primary delivery status indicator
+    if recipient.bounce_status:
+        return {
+            'status': 'bounced',
+            'timestamp': recipient.bounce_time,
+            'details': recipient.bounce_type or 'Email bounced'
+        }
+    
+    if recipient.complained:
+        return {
+            'status': 'complained',
+            'timestamp': recipient.complained_at,
+            'details': 'Recipient reported email as spam'
+        }
+    
+    # Check if recipient has tracking data which indicates a successful delivery
+    tracking_query = EmailTracking.query.filter_by(recipient_id=recipient_id)
+    
+    if email_id:
+        tracking_query = tracking_query.filter_by(email_id=email_id)
+        
+    tracking_data = tracking_query.first()
+    
+    # If we have tracking data, the email was definitely delivered
+    if tracking_data:
+        events = EmailTrackingEvent.query.filter_by(tracking_id=tracking_data.tracking_id).order_by(EmailTrackingEvent.event_time).first()
+        
+        if events:
+            return {
+                'status': 'delivered',
+                'timestamp': events.event_time,
+                'details': f'Email delivered and {tracking_data.track_count} tracking events recorded'
+            }
+        else:
+            return {
+                'status': 'sent',
+                'timestamp': tracking_data.created_at,
+                'details': 'Email sent with no tracking events yet'
+            }
+    
+    # If recipient exists but no bounce or tracking data, assume it's just sent
+    if recipient.status == 'sent':
+        return {
+            'status': 'sent',
+            'timestamp': recipient.updated_at,
+            'details': 'Email sent'
+        }
+    elif recipient.status == 'pending':
+        return {
+            'status': 'pending',
+            'timestamp': None,
+            'details': 'Email not yet sent'
+        }
+    else:
+        return {
+            'status': recipient.status or 'unknown',
+            'timestamp': recipient.updated_at,
+            'details': f'Status: {recipient.status}'
+        }
+
 def init_tracking(app, db):
     """
     Initialize the email tracking system.
