@@ -378,17 +378,35 @@ def process_recipient_file(file_path, recipient_list):
         recipient = EmailRecipient.query.filter_by(email=email).first()
         
         if not recipient:
-            # Create a placeholder campaign_id - it will be used only for creating the recipient
-            # We need this because recipients are always associated with a campaign
-            # Use -999 as a special ID to indicate this is a placeholder
+            # Find or create a valid placeholder campaign for recipient list members
+            # We need this because recipients must be associated with a valid campaign
             custom_data = {}
             for field in custom_fields:
                 if not pd.isna(row[field]):
                     custom_data[field] = row[field]
             
-            # Create new recipient
+            # Find or create a placeholder campaign
+            from models import EmailCampaign
+            placeholder_campaign = EmailCampaign.query.filter_by(name="Recipient List Placeholder").first()
+            
+            if not placeholder_campaign:
+                # Create a placeholder campaign for recipient list members
+                placeholder_campaign = EmailCampaign(
+                    name="Recipient List Placeholder",
+                    subject="Placeholder - Not for Sending",
+                    body_html="<p>This is a placeholder campaign for recipient list members.</p>",
+                    sender_name="System",
+                    sender_email="no-reply@example.com",
+                    scheduled_time=datetime.now(),
+                    status="draft",
+                    created_at=datetime.now()
+                )
+                db.session.add(placeholder_campaign)
+                db.session.flush()  # Get an ID without committing yet
+            
+            # Create new recipient with valid campaign_id
             recipient = EmailRecipient(
-                campaign_id=-999,  # Placeholder
+                campaign_id=placeholder_campaign.id,  # Use valid campaign ID
                 email=email,
                 name=row['name'] if has_name and not pd.isna(row['name']) else row['email'].split('@')[0].replace('.', ' ').title(),
                 status='pending',
