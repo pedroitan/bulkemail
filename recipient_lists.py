@@ -140,6 +140,13 @@ def add_recipients_to_list(list_id):
 @recipient_lists_bp.route('/recipient-lists/<int:list_id>/remove-recipient/<int:recipient_id>', methods=['POST'])
 def remove_recipient_from_list(list_id, recipient_id):
     """Remove a recipient from a list"""
+    # Validate that recipient_id is an integer
+    try:
+        recipient_id = int(recipient_id)  # Ensure it's an integer
+    except (ValueError, TypeError):
+        flash('Invalid recipient ID format', 'danger')
+        return redirect(url_for('recipient_lists_bp.view_recipient_list', list_id=list_id))
+        
     recipient_list = RecipientList.query.get_or_404(list_id)
     recipient = EmailRecipient.query.get_or_404(recipient_id)
     
@@ -193,13 +200,13 @@ def export_recipient_list(list_id):
     return render_template('export_recipients.html', form=form, recipient_list=recipient_list)
 
 def process_recipient_file(file_path, recipient_list):
-    """
-    Process a CSV or Excel file of recipients and add them to the specified list.
-    Returns the number of recipients added to the list.
+    """Process a CSV or Excel file of recipients and add them to a list
     
-    Enhanced to:
+    Handles automatic detection of columns and data cleaning:
     1. Automatically detect email columns
     2. Extract names from emails if no name column exists
+    3. Thoroughly clean and validate email addresses
+    4. Skip malformed data and provide detailed error reporting
     """
     # Determine file type and read accordingly
     if file_path.endswith('.csv'):
@@ -319,13 +326,20 @@ def process_recipient_file(file_path, recipient_list):
     if email_col != 'email':
         df = df.rename(columns={email_col: 'email'})
     
-    # Clean email addresses
-    df['email'] = df['email'].str.lower().str.strip()
+    # Clean email addresses - thoroughly clean to remove any trailing/leading characters
+    df['email'] = df['email'].astype(str)
+    df['email'] = df['email'].apply(lambda x: x.lower().strip().strip(',').strip().split()[0] if ' ' in x else x.lower().strip().strip(',').strip())
     
-    # Filter out invalid emails
-    valid_email_pattern = r'[\w.%+-]+@[\w.-]+\.[a-zA-Z]{2,}'
-    valid_emails = df['email'].str.contains(valid_email_pattern, regex=True, na=False)
+    # Log the cleaned emails for debugging
+    print(f"First 5 cleaned emails: {df['email'].head(5).tolist()}")
+    
+    # Filter out invalid emails with more robust validation
+    valid_email_pattern = r'^[\w.%+-]+@[\w.-]+\.[a-zA-Z]{2,}$'  # Note the ^ and $ to match entire string
+    valid_emails = df['email'].str.match(valid_email_pattern, na=False)
     invalid_count = (~valid_emails).sum()
+    
+    if invalid_count > 0:
+        print(f"Invalid emails found: {df[~valid_emails]['email'].head(5).tolist()}")
     
     if invalid_count > 0:
         print(f"Warning: Filtering out {invalid_count} invalid email addresses")
