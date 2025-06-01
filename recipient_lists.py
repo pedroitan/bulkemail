@@ -196,6 +196,10 @@ def process_recipient_file(file_path, recipient_list):
     """
     Process a CSV or Excel file of recipients and add them to the specified list.
     Returns the number of recipients added to the list.
+    
+    Enhanced to:
+    1. Automatically detect email columns
+    2. Extract names from emails if no name column exists
     """
     # Determine file type and read accordingly
     if file_path.endswith('.csv'):
@@ -206,17 +210,155 @@ def process_recipient_file(file_path, recipient_list):
         raise ValueError("Unsupported file format. Please use CSV or Excel.")
     
     # Clean column names (lowercase, strip whitespace)
+    original_columns = list(df.columns)
     df.columns = [col.lower().strip() for col in df.columns]
     
-    # Ensure required columns exist
-    if 'email' not in df.columns:
-        raise ValueError("File must contain an 'email' column")
+    # Find an email column automatically
+    email_col = None
+    email_keywords = ['email', 'e-mail', 'mail', 'correo', 'correio', 'courriel', 'e mail', 'address']
+    email_pattern = r'[\w.%+-]+@[\w.-]+\.[a-zA-Z]{2,}'
+    
+    # Try several detection strategies, from most reliable to least
+    
+    # Strategy 1: Check for exact column name 'email'
+    if 'email' in df.columns:
+        email_col = 'email'
+    
+    # Strategy 2: Find columns with email-related keywords in the name
+    if not email_col:
+        # Generate all possible combinations of email keywords to check
+        email_candidates = []
+        for col in df.columns:
+            col_lower = col.lower()
+            if any(keyword in col_lower for keyword in email_keywords):
+                email_candidates.append(col)
+                
+        if email_candidates:
+            # Prioritize columns with 'email' specifically in the name
+            primary_candidates = [col for col in email_candidates if 'email' in col.lower()]
+            if primary_candidates:
+                email_col = primary_candidates[0]
+            else:
+                email_col = email_candidates[0]
+    
+    # Strategy 3: Print all columns to help debug (also use in output error message)
+    columns_str = ", ".join([f"'{col}'" for col in df.columns])
+    print(f"Available columns: {columns_str}")
+    
+    # Strategy 4: Check for email-like content in ANY column
+    if not email_col:
+        best_match_score = 0
+        best_match_col = None
+        
+        for col in df.columns:
+            # Convert all values to string and check for email pattern
+            try:
+                # Skip columns that are clearly not emails (very short strings)
+                sample = df[col].dropna().astype(str).head(20)
+                if len(sample) == 0:
+                    continue
+                    
+                # Skip if the values are too short to be emails
+                if sample.str.len().mean() < 6:  # emails are usually longer than 6 chars
+                    continue
+                
+                # Check for @ symbol as a quick filter
+                has_at_symbol = sample.str.contains('@')
+                at_symbol_ratio = has_at_symbol.mean() if len(has_at_symbol) > 0 else 0
+                
+                if at_symbol_ratio > 0.5:  # At least half of samples have @ symbol
+                    # More detailed regex check on these promising candidates
+                    matches = sample.str.contains(email_pattern, regex=True)
+                    match_ratio = matches.mean() if len(matches) > 0 else 0
+                    
+                    if match_ratio > best_match_score:
+                        best_match_score = match_ratio
+                        best_match_col = col
+                        
+                    # Print debug info
+                    print(f"Column '{col}' has {match_ratio*100:.1f}% email-like values")
+                    
+                    # Break early if we found a very good match
+                    if match_ratio > 0.8:
+                        email_col = col
+                        break
+            except Exception as e:
+                print(f"Error analyzing column '{col}': {str(e)}")
+        
+        # If we found a decent match but not perfect, use it
+        if not email_col and best_match_score > 0.5 and best_match_col:
+            email_col = best_match_col
+    
+    if not email_col:
+        raise ValueError(f"Could not find a column containing email addresses. Available columns: {columns_str}. Please include a column with email addresses.")
+    
+    # Print which column we're using as email
+    print(f"Using column '{email_col}' as the email address source")
+    
+    # Additional validation & cleanup on the identified email column
+    # Convert the column to string type (in case it's not already)
+    df[email_col] = df[email_col].astype(str)
+    
+    # Check if the values look like emails
+    valid_email_mask = df[email_col].str.contains(email_pattern, regex=True, na=False)
+    valid_email_count = valid_email_mask.sum()
+    total_rows = len(df)
+    
+    if valid_email_count == 0:
+        raise ValueError(f"Column '{email_col}' was selected as the email column but doesn't contain valid email addresses.")
+    
+    if valid_email_count < total_rows * 0.5 and total_rows > 5:
+        print(f"Warning: Only {valid_email_count} out of {total_rows} rows contain valid email addresses in column '{email_col}'")
+    
+    # Rename the detected column to 'email' for consistency
+    if email_col != 'email':
+        df = df.rename(columns={email_col: 'email'})
+        print(f"Using column '{email_col}' as the email address source")
+    
+    # Rename the detected column to 'email' for consistency
+    if email_col != 'email':
+        df = df.rename(columns={email_col: 'email'})
     
     # Clean email addresses
     df['email'] = df['email'].str.lower().str.strip()
     
-    # Optional name column
-    has_name = 'name' in df.columns
+    # Filter out invalid emails
+    valid_email_pattern = r'[\w.%+-]+@[\w.-]+\.[a-zA-Z]{2,}'
+    valid_emails = df['email'].str.contains(valid_email_pattern, regex=True, na=False)
+    invalid_count = (~valid_emails).sum()
+    
+    if invalid_count > 0:
+        print(f"Warning: Filtering out {invalid_count} invalid email addresses")
+        df = df[valid_emails].copy()
+        
+    if len(df) == 0:
+        raise ValueError("No valid email addresses found in the file after filtering")
+        
+    print(f"Found {len(df)} valid email addresses in the file")
+    
+    # Optional name column - check if any column might contain names
+    name_col = None
+    potential_name_cols = ['name', 'full name', 'fullname', 'contact name', 'contact', 'person']
+    
+    # Look for columns that might contain names
+    for name_candidate in potential_name_cols:
+        name_matches = [col for col in df.columns if name_candidate in col.lower()]
+        if name_matches:
+            name_col = name_matches[0]
+            break
+    
+    # Use the found name column or fall back to email prefix
+    if name_col:
+        print(f"Using column '{name_col}' for recipient names")
+        # Rename to 'name' for consistency
+        if name_col != 'name':
+            df = df.rename(columns={name_col: 'name'})
+    else:
+        # Create a name column from email prefix
+        print("No name column found - using email prefix as name")
+        df['name'] = df['email'].str.split('@').str[0].str.replace('.', ' ').str.title()
+        
+    has_name = True  # We'll always have a name column now
     
     # Process custom fields (any columns other than email and name)
     custom_fields = [col for col in df.columns if col not in ['email', 'name']]
@@ -248,7 +390,7 @@ def process_recipient_file(file_path, recipient_list):
             recipient = EmailRecipient(
                 campaign_id=-999,  # Placeholder
                 email=email,
-                name=row['name'] if has_name and not pd.isna(row['name']) else None,
+                name=row['name'] if has_name and not pd.isna(row['name']) else row['email'].split('@')[0].replace('.', ' ').title(),
                 status='pending',
                 global_status='active'  # Default to active
             )

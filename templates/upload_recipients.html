@@ -6,25 +6,31 @@
 <div class="container-fluid">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h2><i class="bi bi-upload me-2"></i>Upload Recipients</h2>
+        {% if campaign %}
         <a href="{{ url_for('campaign_detail', campaign_id=campaign.id) }}" class="btn btn-outline-secondary">
             <i class="bi bi-arrow-left me-2"></i>Back to Campaign
         </a>
+        {% elif recipient_list %}
+        <a href="{{ url_for('recipient_lists_bp.view_recipient_list', list_id=recipient_list.id) }}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-2"></i>Back to List
+        </a>
+        {% endif %}
     </div>
 
     <div class="row">
         <div class="col-md-8">
             <div class="card">
                 <div class="card-header">
-                    <h5 class="card-title mb-0">Upload Recipients for "{{ campaign.name }}"</h5>
+                    <h5 class="card-title mb-0">Upload Recipients {% if campaign %}for "{{ campaign.name }}"{% elif recipient_list %}to "{{ recipient_list.name }}"{% endif %}</h5>
                 </div>
                 <div class="card-body">
                     <div class="alert alert-info">
                         <h6><i class="bi bi-info-circle me-2"></i>File Format Instructions</h6>
-                        <p>Please upload a CSV or Excel file with the following requirements:</p>
+                        <p>Upload a CSV or Excel file with your recipient data:</p>
                         <ul>
-                            <li>The file <strong>must</strong> include an <code>email</code> column</li>
-                            <li>Including a <code>name</code> column is recommended for personalization</li>
-                            <li>Any additional columns will be available as template variables</li>
+                            <li><strong>Email addresses:</strong> The system will automatically detect columns containing email addresses (like <code>email</code>, <code>email address</code>, etc.)</li>
+                            <li><strong>Names:</strong> If a name column is found (like <code>name</code>, <code>full name</code>, etc.), it will be used; otherwise names will be extracted from email addresses</li>
+                            <li><strong>Custom fields:</strong> Any additional columns will be available as template variables</li>
                             <li>For example, if your file has a column called <code>company</code>, you can use <code>${company}</code> in your email template</li>
                         </ul>
                     </div>
@@ -46,7 +52,11 @@
                         </div>
                         
                         <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                            {% if campaign %}
                             <a href="{{ url_for('campaign_detail', campaign_id=campaign.id) }}" class="btn btn-outline-secondary">Cancel</a>
+                            {% elif recipient_list %}
+                            <a href="{{ url_for('recipient_lists_bp.view_recipient_list', list_id=recipient_list.id) }}" class="btn btn-outline-secondary">Cancel</a>
+                            {% endif %}
                             {{ form.submit(class="btn btn-primary") }}
                         </div>
                     </form>

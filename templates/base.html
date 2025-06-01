@@ -92,6 +92,9 @@
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('campaigns') }}">{{ _('Campaigns') }}</a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('recipient_lists_bp.recipient_lists') }}">{{ _('Recipient Lists') }}</a>
+                    </li>
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" id="languageDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                             <i class="bi bi-globe"></i> {{ languages[current_language] }}
@@ -132,6 +135,9 @@
                     </a>
                     <a href="{{ url_for('tracking_campaigns') }}" class="list-group-item list-group-item-action {% if request.endpoint == 'tracking_campaigns' %}active{% endif %}">
                         <i class="bi bi-graph-up me-2"></i> {{ _('Email Tracking') }}
+                    </a>
+                    <a href="{{ url_for('recipient_lists_bp.recipient_lists') }}" class="list-group-item list-group-item-action {% if request.endpoint == 'recipient_lists_bp.recipient_lists' %}active{% endif %}">
+                        <i class="bi bi-people me-2"></i> {{ _('Recipient Lists') }}
                     </a>
                 </div>
             </div>
