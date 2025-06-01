@@ -207,6 +207,7 @@ def process_recipient_file(file_path, recipient_list):
     2. Extract names from emails if no name column exists
     3. Thoroughly clean and validate email addresses
     4. Skip malformed data and provide detailed error reporting
+    5. Ensure proper type handling for IDs to prevent type mismatch errors
     """
     # Determine file type and read accordingly
     if file_path.endswith('.csv'):
@@ -388,8 +389,30 @@ def process_recipient_file(file_path, recipient_list):
         if not email or pd.isna(email):
             continue
             
-        # Check if recipient already exists
-        recipient = EmailRecipient.query.filter_by(email=email).first()
+        # Debug logging for troubleshooting
+        print(f"Processing email: '{email}'")
+            
+        # Make sure the email is a string and properly formatted
+        try:
+            if not isinstance(email, str):
+                email = str(email).strip()
+            # Further clean email address to remove any problematic characters
+            email = email.lower().strip().strip(',').strip()
+            
+            # Skip obviously invalid emails
+            if '@' not in email or len(email) < 5:
+                print(f"Skipping invalid email format: '{email}'")
+                continue
+        except Exception as e:
+            print(f"Error cleaning email '{email}': {str(e)}")
+            continue
+            
+        # Check if recipient already exists - using email lookup, not ID
+        try:
+            recipient = EmailRecipient.query.filter_by(email=email).first()
+        except Exception as e:
+            print(f"Error querying for recipient with email '{email}': {str(e)}")
+            continue
         
         if not recipient:
             # Find or create a valid placeholder campaign for recipient list members
@@ -434,20 +457,37 @@ def process_recipient_file(file_path, recipient_list):
             db.session.add(recipient)
             db.session.flush()  # Get an ID assigned without committing
         
-        # Check if recipient is already in this list
-        assoc = db.session.query(recipient_list_items).filter_by(
-            list_id=recipient_list.id, 
-            recipient_id=recipient.id
-        ).first()
-        
-        if not assoc:
-            # Add to the list
-            stmt = recipient_list_items.insert().values(
-                list_id=recipient_list.id,
+        # Ensure recipient.id is a valid integer before using it
+        try:
+            # Verify we have a valid recipient object with an integer ID
+            if not recipient or not hasattr(recipient, 'id'):
+                print(f"Error: Invalid recipient object for email '{email}'")
+                continue
+                
+            if not isinstance(recipient.id, int):
+                print(f"Error: Invalid recipient ID type ({type(recipient.id)}) for email '{email}'")
+                continue
+                
+            # Check if recipient is already in this list
+            assoc = db.session.query(recipient_list_items).filter_by(
+                list_id=recipient_list.id, 
                 recipient_id=recipient.id
-            )
-            db.session.execute(stmt)
-            added_count += 1
+            ).first()
+            
+            if not assoc:
+                # Add to the list - ensure we're using the integer ID, not the email
+                stmt = recipient_list_items.insert().values(
+                    list_id=recipient_list.id,
+                    recipient_id=recipient.id  # This must be an integer
+                )
+                db.session.execute(stmt)
+                added_count += 1
+                print(f"Added recipient with email '{email}' (ID: {recipient.id}) to list")
+        except Exception as e:
+            db.session.rollback()  # Rollback any failed transaction
+            print(f"Error adding recipient '{email}' to list: {str(e)}")
+            # Continue processing other recipients
+            continue
     
     # Commit all changes
     db.session.commit()
