@@ -18,13 +18,27 @@ logger = logging.getLogger(__name__)
 # Add the parent directory to sys.path
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
-# Import Flask app and models
+# Import models but create our own Flask app
+from flask import Flask
+import os
 from models import db, EmailCampaign
-from app import get_app
 
 def run_migration():
     """Run the database migration to add batch execution tables."""
-    app = get_app()
+    # Create a minimal Flask app instance specifically for this migration
+    app = Flask(__name__)
+    
+    # Configure database - respect DATABASE_URL environment variable if present
+    database_url = os.environ.get('DATABASE_URL', 'sqlite:///app.db')
+    # Handle old postgres:// URLs from Render
+    if database_url.startswith('postgres://'):
+        database_url = database_url.replace('postgres://', 'postgresql://', 1)
+    
+    app.config['SQLALCHEMY_DATABASE_URI'] = database_url
+    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    
+    # Initialize the database with this app
+    db.init_app(app)
     
     with app.app_context():
         logger.info("Starting batch execution tables migration...")

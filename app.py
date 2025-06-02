@@ -2868,30 +2868,47 @@ def get_app():
 # SQS processing job is now imported from sqs_jobs.py
 # This avoids serialization issues with APScheduler
 
-app = get_app()
+# Global app variable - will be set when get_app() is called
+app = None
 
-# Initialize scheduler when app is created
-with app.app_context():
-    scheduler = app.get_scheduler()
-    # Make sure scheduler is running
+def initialize_app():
+    """Initialize the Flask app and run all setup steps.
     
-    # Register our scheduled execution commands
-    try:
-        from commands import register_commands
-        register_commands(app)
-        app.logger.info('Registered batch processing commands for scheduled execution')
-    except Exception as e:
-        app.logger.error(f'Error registering batch processing commands: {str(e)}')
+    This function is used to avoid circular imports while still allowing
+    app initialization when the file is run directly.
+    """
+    global app
+    app = get_app()
     
-    # Register scheduled execution routes
-    try:
-        from scheduled_execution import register_routes
-        register_routes(app)
-        app.logger.info('Registered scheduled execution routes for large email campaigns')
-    except Exception as e:
-        app.logger.error(f'Error registering scheduled execution routes: {str(e)}')
+    # Initialize scheduler when app is created
+    with app.app_context():
+        scheduler = app.get_scheduler()
+        # Make sure scheduler is running
+        
+        # Register our scheduled execution commands
+        try:
+            from commands import register_commands
+            register_commands(app)
+            app.logger.info('Registered batch processing commands for scheduled execution')
+        except Exception as e:
+            app.logger.error(f'Error registering batch processing commands: {str(e)}')
+        
+        # Register scheduled execution routes
+        try:
+            from scheduled_execution import register_routes
+            register_routes(app)
+            app.logger.info('Registered scheduled execution routes for large email campaigns')
+        except Exception as e:
+            app.logger.error(f'Error registering scheduled execution routes: {str(e)}')
+    
     if scheduler.scheduler and not scheduler.scheduler.running:
         scheduler.init_scheduler(app)
+    
+    return app
+
+# Only initialize the app if this file is run directly, not when imported
+if __name__ == '__main__':
+    initialize_app()
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
