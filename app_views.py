@@ -3,9 +3,9 @@
 """Extracted views from app.py for the Bulk Email Scheduler application
 These are the main application routes."""
 from flask import render_template, redirect, url_for, request, flash, jsonify, current_app
-from datetime import datetime
+from datetime import datetime, timedelta
 import os
-from models import db, EmailCampaign, EmailRecipient
+from models import db, EmailCampaign, EmailRecipient, RecipientList
 from flask_wtf import FlaskForm
 from wtforms import StringField, TextAreaField, DateTimeField, SelectField, BooleanField, IntegerField, SubmitField
 from wtforms.validators import DataRequired, Email, Optional, Length, ValidationError
@@ -60,6 +60,9 @@ def register_routes(app):
         
         if form.validate_on_submit():
             # Create a new campaign
+            # Ensure scheduled_time has a default value (now + 1 hour) if not provided
+            scheduled_time = form.scheduled_time.data if form.scheduled_time.data else datetime.now() + timedelta(hours=1)
+            
             campaign = EmailCampaign(
                 name=form.name.data,
                 subject=form.subject.data,
@@ -67,7 +70,7 @@ def register_routes(app):
                 sender_email=f"{form.sender_email.data}@{form.sender_domain.data}",
                 body_html=form.body_html.data,
                 body_text=form.body_text.data,
-                scheduled_time=form.scheduled_time.data,
+                scheduled_time=scheduled_time,  # Use our default value if needed
                 status='draft',
                 created_at=datetime.now(),
                 batch_execution_enabled=form.batch_execution_enabled.data,
@@ -134,7 +137,22 @@ def register_routes(app):
     
     @app.route('/verify_recipients', methods=['GET', 'POST'])
     def verify_recipients():
-        return render_template('verify_recipients.html')
+        # Get all recipient lists to display in the template
+        recipient_lists = RecipientList.query.all()
+        
+        # Get all campaigns for the legacy verification method
+        campaigns = EmailCampaign.query.all()
+        
+        # Show the verification page with both recipient lists and campaigns
+        if request.method == 'GET':
+            return render_template('verify_recipients.html', 
+                               recipient_lists=recipient_lists, 
+                               campaigns=campaigns)
+        
+        # Handle POST request for legacy campaign verification
+        if 'campaign_id' in request.form:
+            campaign_id = request.form['campaign_id']
+            return redirect(url_for('verify_campaign_recipients', campaign_id=campaign_id))
     
     @app.route('/bounce_report')
     def bounce_report():

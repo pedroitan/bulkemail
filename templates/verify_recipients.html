@@ -2,43 +2,231 @@
 
 {% block title %}{{ _('Verify Email Recipients') }}{% endblock %}
 
+{% block extra_css %}
+<style>
+    .verification-card {
+        transition: transform 0.2s;
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    .verification-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+    }
+    .verification-icon {
+        font-size: 2.5rem;
+        margin-bottom: 15px;
+    }
+    .verification-benefits {
+        background-color: #f8f9fa;
+        border-radius: 8px;
+        padding: 20px;
+    }
+    .benefit-item {
+        display: flex;
+        align-items: flex-start;
+        margin-bottom: 15px;
+    }
+    .benefit-icon {
+        font-size: 1.5rem;
+        margin-right: 15px;
+        color: #0d6efd;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h2><i class="bi bi-check-circle me-2"></i>{{ _('Verify Email Recipients') }}</h2>
     </div>
-        
-        <div class="alert alert-info">
-            <p>{{ _('This tool verifies the email addresses in your campaign to reduce bounce rates. The verification process checks:') }}</p>
-            <ul>
-                <li>{{ _('Email syntax validity') }}</li>
-                <li>{{ _('Domain existence (DNS lookup)') }}</li>
-                <li>{{ _('Basic MX record validation') }}</li>
-            </ul>
+    
+    <!-- Verification process overview -->
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">{{ _('Email Verification Process') }}</h5>
+                </div>
+                <div class="card-body">
+                    <p class="lead">{{ _('Improve your email deliverability by verifying your recipient list before sending.') }}</p>
+                    
+                    <div class="row mt-4">
+                        <div class="col-md-4 mb-3">
+                            <div class="card h-100 verification-card border-primary">
+                                <div class="card-body text-center">
+                                    <div class="verification-icon text-primary">
+                                        <i class="bi bi-check2-circle"></i>
+                                    </div>
+                                    <h5>{{ _('Syntax Check') }}</h5>
+                                    <p class="text-muted">{{ _('Validates email format and structure') }}</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <div class="card h-100 verification-card border-primary">
+                                <div class="card-body text-center">
+                                    <div class="verification-icon text-primary">
+                                        <i class="bi bi-globe"></i>
+                                    </div>
+                                    <h5>{{ _('Domain Validation') }}</h5>
+                                    <p class="text-muted">{{ _('Confirms domain exists and can receive email') }}</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <div class="card h-100 verification-card border-primary">
+                                <div class="card-body text-center">
+                                    <div class="verification-icon text-primary">
+                                        <i class="bi bi-shield-check"></i>
+                                    </div>
+                                    <h5>{{ _('Fraud Detection') }}</h5>
+                                    <p class="text-muted">{{ _('Identifies disposable or risky email domains') }}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
         
-        {% if campaigns %}
-            <form method="POST" action="{{ url_for('verify_recipients') }}">
-                <div class="mb-3">
-                    <label for="campaign_id" class="form-label">{{ _('Select Campaign') }}</label>
-                    <select class="form-select" id="campaign_id" name="campaign_id" required>
-                        <option value="">{{ _('Select a campaign') }}</option>
-                        {% for campaign in campaigns %}
-                            <option value="{{ campaign.id }}">{{ campaign.name }}</option>
-                        {% endfor %}
-                    </select>
+        <div class="col-md-4">
+            <div class="verification-benefits">
+                <h5 class="mb-3">{{ _('Benefits of Verification') }}</h5>
+                
+                <div class="benefit-item">
+                    <div class="benefit-icon">
+                        <i class="bi bi-graph-up"></i>
+                    </div>
+                    <div>
+                        <h6>{{ _('Improved Deliverability') }}</h6>
+                        <p class="text-muted small">{{ _('Higher inbox placement and sender reputation') }}</p>
+                    </div>
                 </div>
                 
-                <button type="submit" class="btn btn-primary">{{ _('Start Verification') }}</button>
-            </form>
-        {% else %}
-            <div class="alert alert-warning">
-                {{ _('No campaigns available for verification.') }} <a href="{{ url_for('create_campaign') }}">{{ _('Create a campaign') }}</a> {{ _('first.') }}
+                <div class="benefit-item">
+                    <div class="benefit-icon">
+                        <i class="bi bi-cash"></i>
+                    </div>
+                    <div>
+                        <h6>{{ _('Cost Savings') }}</h6>
+                        <p class="text-muted small">{{ _('Avoid wasting resources on invalid emails') }}</p>
+                    </div>
+                </div>
+                
+                <div class="benefit-item">
+                    <div class="benefit-icon">
+                        <i class="bi bi-bar-chart"></i>
+                    </div>
+                    <div>
+                        <h6>{{ _('Better Campaign Metrics') }}</h6>
+                        <p class="text-muted small">{{ _('More accurate open and click rates') }}</p>
+                    </div>
+                </div>
             </div>
-        {% endif %}
-        
-        <div class="mt-4">
-            <a href="{{ url_for('campaigns') }}" class="btn btn-outline-secondary">{{ _('Back to Campaigns') }}</a>
         </div>
     </div>
+    
+    <!-- Campaign selection -->
+    <div class="card mb-4">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0">{{ _('Verify Recipient Lists') }}</h5>
+        </div>
+        <div class="card-body">
+            <div class="alert alert-info mb-4">
+                <i class="bi bi-info-circle-fill me-2"></i>
+                {{ _('You can now verify recipient lists directly without needing to create a campaign first!') }}
+            </div>
+
+            <!-- Recipient Lists Section -->
+            <h6 class="fw-bold mb-3">{{ _('Recipient Lists to Verify:') }}</h6>
+            
+            {% if recipient_lists %}
+                <div class="table-responsive mb-4">
+                    <table class="table table-hover table-bordered">
+                        <thead class="table-light">
+                            <tr>
+                                <th>{{ _('Name') }}</th>
+                                <th>{{ _('Recipients') }}</th>
+                                <th>{{ _('Actions') }}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for list in recipient_lists %}
+                                <tr>
+                                    <td>{{ list.name }}</td>
+                                    <td>{{ list.recipient_count or 0 }}</td>
+                                    <td>
+                                        <a href="{{ url_for('recipient_lists_bp.verify_recipient_list', list_id=list.id) }}" class="btn btn-sm btn-primary">
+                                            <i class="bi bi-lightning me-1"></i> {{ _('Verify') }}
+                                        </a>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-3">
+                    <a href="{{ url_for('recipient_lists_bp.recipient_lists') }}" class="btn btn-outline-secondary">
+                        <i class="bi bi-list-ul me-1"></i> {{ _('Manage Recipient Lists') }}
+                    </a>
+                </div>
+            {% else %}
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    {{ _('No recipient lists available for verification.') }}
+                </div>
+                
+                <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                    <a href="{{ url_for('recipient_lists_bp.recipient_lists') }}" class="btn btn-primary">
+                        <i class="bi bi-plus-circle me-1"></i> {{ _('Create New Recipient List') }}
+                    </a>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+    
+    <!-- Legacy Campaign Verification Section -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">{{ _('Legacy: Verify by Campaign') }}</h5>
+        </div>
+        <div class="card-body">
+            {% if campaigns %}
+                <form method="POST" action="{{ url_for('verify_recipients') }}">
+                    <div class="mb-3">
+                        <label for="campaign_id" class="form-label">{{ _('Select Campaign to Verify') }}</label>
+                        <select class="form-select form-select-lg" id="campaign_id" name="campaign_id" required>
+                            <option value="">{{ _('Select a campaign') }}</option>
+                            {% for campaign in campaigns %}
+                                <option value="{{ campaign.id }}">{{ campaign.name }} ({{ campaign.recipients_count or 0 }} {{ _('recipients') }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <a href="{{ url_for('campaigns') }}" class="btn btn-outline-secondary me-md-2">
+                            <i class="bi bi-arrow-left me-1"></i> {{ _('Back to Campaigns') }}
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-lightning me-1"></i> {{ _('Start Verification') }}
+                        </button>
+                    </div>
+                </form>
+            {% else %}
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    {{ _('No campaigns available for verification.') }}
+                    <a href="{{ url_for('create_campaign') }}" class="alert-link">{{ _('Create a campaign') }}</a> {{ _('first.') }}
+                </div>
+                
+                <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                    <a href="{{ url_for('campaigns') }}" class="btn btn-primary">
+                        <i class="bi bi-plus-circle me-1"></i> {{ _('Create New Campaign') }}
+                    </a>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
 {% endblock %}

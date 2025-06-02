@@ -1685,7 +1685,20 @@ def create_app(config_object='config.Config'):
     
     @app.route('/recipients/verify', methods=['GET', 'POST'])
     def verify_recipients():
-        """Verify email addresses in a campaign"""
+        """Display a page for verifying recipient lists or campaigns"""
+        # Get all recipient lists to display in the template
+        recipient_lists = RecipientList.query.all()
+        
+        # Get all campaigns for the legacy verification method
+        campaigns = EmailCampaign.query.all()
+        
+        # Show the verification page with both recipient lists and campaigns
+        if request.method == 'GET':
+            return render_template('verify_recipients.html', 
+                                 recipient_lists=recipient_lists, 
+                                 campaigns=campaigns)
+        
+        # Handle POST request for campaign verification (legacy method)
         if request.method == 'POST':
             campaign_id = request.form.get('campaign_id')
             
@@ -1743,17 +1756,35 @@ def create_app(config_object='config.Config'):
             flash(f'Email verification started for {len(emails)} recipients. This may take a few minutes.', 'info')
             return redirect(url_for('verify_recipients_results', campaign_id=campaign_id))
         
-        # GET request - show form
-        campaigns = EmailCampaign.query.all()
-        return render_template('verify_recipients.html', campaigns=campaigns)
+        app.logger.info(f"Updated open status for {email} from '{original_status}' to 'opened'")
         
-    @app.route('/recipients/verify/<int:campaign_id>/results', methods=['GET'])
-    def verify_recipients_results(campaign_id):
-        """Show verification results for a campaign"""
-        campaign = EmailCampaign.query.get_or_404(campaign_id)
+        # Commit the changes
+        try:
+            db.session.commit()
+            app.logger.info(f"Updated open status for {email}")
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f"Error updating open status: {str(e)}")
+
+def handle_click_notification(message):
+    """Handle click notifications from SES"""
+    app.logger.info("==== HANDLING CLICK NOTIFICATION ====")
+    click_info = message.get('click', {})
+    
+    # Get the message ID from the mail object
+    mail_obj = message.get('mail', {})
+    message_id = mail_obj.get('messageId')
+    app.logger.info(f"Message ID from notification: {message_id}")
+    
+    # Log all clicked recipients
+    clicked_recipients = click_info.get('recipients', [])
+    app.logger.info(f"Clicked recipients: {clicked_recipients}")
+    
+    for email in clicked_recipients:
+        app.logger.info(f"Processing click notification for {email} with message ID: {message_id}")
         
-        # Get filter parameters
-        status = request.args.get('status', 'all')
+        # Find the recipient record
+        recipient_record = EmailRecipient.query.filter_by(message_id=message_id, email=email).first()
         sort = request.args.get('sort', 'email')
         q = request.args.get('q', '')
         page = request.args.get('page', 1, type=int)
@@ -1891,6 +1922,75 @@ def create_app(config_object='config.Config'):
             flash('No invalid email addresses found in this campaign.', 'info')
             
         return redirect(url_for('verify_recipients_results', campaign_id=campaign_id))
+    
+    @app.route('/recipients/verify/<int:campaign_id>/save', methods=['POST'])
+    def save_verified_recipients(campaign_id):
+        """Save verified recipients from a campaign as a new recipient list"""
+        try:
+            # Get campaign
+            campaign = EmailCampaign.query.get_or_404(campaign_id)
+            
+            # Get form data
+            list_name = request.form.get('list_name', f"{campaign.name} - Verified Recipients")
+            list_description = request.form.get('list_description', f"Verified recipients from campaign: {campaign.name}")
+            include_valid = 'include_valid' in request.form
+            include_risky = 'include_risky' in request.form
+            
+            # Determine which recipients to include
+            query = EmailRecipient.query.filter_by(campaign_id=campaign_id)
+            conditions = []
+            
+            if include_valid:
+                conditions.append(EmailRecipient.verification_result == 'valid')
+            
+            if include_risky:
+                conditions.append(EmailRecipient.verification_result == 'risky')
+            
+            if conditions:
+                query = query.filter(or_(*conditions))
+            else:
+                flash('You must select at least one category of recipients to include', 'warning')
+                return redirect(url_for('verify_recipients_results', campaign_id=campaign_id))
+            
+            recipients_to_save = query.all()
+            
+            if not recipients_to_save:
+                flash('No recipients match the selected criteria', 'warning')
+                return redirect(url_for('verify_recipients_results', campaign_id=campaign_id))
+            
+            # Create a new recipient list
+            from recipient_lists import RecipientList, RecipientListEntry
+            
+            new_list = RecipientList(
+                name=list_name,
+                description=list_description,
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow()
+            )
+            
+            db.session.add(new_list)
+            db.session.flush()  # Get the new list ID without committing
+            
+            # Add recipients to the list
+            for recipient in recipients_to_save:
+                entry = RecipientListEntry(
+                    list_id=new_list.id,
+                    email=recipient.email,
+                    name=recipient.name,
+                    created_at=datetime.utcnow()
+                )
+                db.session.add(entry)
+            
+            db.session.commit()
+            
+            flash(f'Successfully created recipient list "{list_name}" with {len(recipients_to_save)} recipients', 'success')
+            return redirect(url_for('recipient_lists_bp.view_recipient_list', list_id=new_list.id))
+            
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f"Error saving verified recipients: {str(e)}")
+            flash(f'Error creating recipient list: {str(e)}', 'danger')
+            return redirect(url_for('verify_recipients_results', campaign_id=campaign_id))
     
     @app.route('/reports/tracking', methods=['GET'])
     def tracking_report():
@@ -2796,4 +2896,5 @@ with app.app_context():
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
 
-app = create_app()  # This creates the Flask instance for Gunicorn
+# The application instance is already created above
+# app = create_app()  # This line was causing the app to be reinitialized improperly
