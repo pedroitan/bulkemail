@@ -32,8 +32,9 @@ db.init_app(app)
 babel = Babel(app)
 
 # Initialize email tracking
-from email_tracking import tracking_manager
-tracking_manager.init_app(app)
+from email_tracking import init_tracking
+from models import db
+init_tracking(app, db)
 
 # Register blueprints
 from recipient_lists import recipient_lists_bp
