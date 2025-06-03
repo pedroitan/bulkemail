@@ -47,6 +47,8 @@ def index():
 
 with app.app_context():
     import app_views
+    # Register all routes from app_views
+    app_views.register_routes(app)
     
     # Register CLI commands if needed for Render's scheduled tasks
     try:
