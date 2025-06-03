@@ -38,9 +38,13 @@ init_tracking(app, db)
 
 # Register blueprints
 from recipient_lists import recipient_lists_bp
-app.register_blueprint(recipient_lists_bp)
+app.register_blueprint(recipient_lists_bp, url_prefix='/recipients')
 
-# Import views after app is created
+# Add a root route for health checks
+@app.route('/')
+def index():
+    return 'Bulk Email Scheduler is running', 200
+
 with app.app_context():
     import app_views
     
