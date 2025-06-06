@@ -29,7 +29,8 @@ from models import db
 db.init_app(app)
 
 # Initialize translations
-babel = Babel(app)
+from translations import configure_babel
+configure_babel(app)
 
 # Initialize email tracking
 from email_tracking import init_tracking
