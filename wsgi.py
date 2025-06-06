@@ -40,11 +40,7 @@ init_tracking(app, db)
 from recipient_lists import recipient_lists_bp
 app.register_blueprint(recipient_lists_bp, url_prefix='/recipients')
 
-# Add a root route for health checks
-@app.route('/')
-def index():
-    return 'Bulk Email Scheduler is running', 200
-
+# Register routes from app_views
 with app.app_context():
     import app_views
     # Register all routes from app_views
